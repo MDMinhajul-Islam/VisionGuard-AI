@@ -1,0 +1,41 @@
+from app.vision.fall_detection import PoseObservation, detect_fall_events, pose_signals
+
+
+def upright(t, hip_y=.45, frame=""):
+    return PoseObservation(t, (.5, hip_y - .22), (.5, hip_y), (.38, .12, .62, .9), .95, frame)
+
+
+def horizontal(t, hip_y=.7, frame=""):
+    return PoseObservation(t, (.3, hip_y), (.52, hip_y), (.15, .55, .85, .82), .95, frame)
+
+
+def test_upright_walking_does_not_trigger():
+    observations = [upright(i * .25, .44 + (i % 2) * .01) for i in range(12)]
+    assert detect_fall_events(observations) == []
+
+
+def test_sudden_transition_persisting_horizontal_triggers_review_candidate():
+    observations = [upright(0, frame="u0"), upright(.4, frame="u1"), horizontal(.9, frame="h1"), horizontal(1.2, frame="h2"), horizontal(1.5, frame="h3")]
+    events = detect_fall_events(observations)
+    assert len(events) == 1
+    assert events[0].state == "Potential Fall — Review Required"
+    assert "h2" in events[0].supporting_frames
+
+
+def test_sitting_and_crouching_do_not_trigger():
+    sitting = [upright(0), PoseObservation(.5, (.5, .35), (.5, .58), (.35, .2, .65, .82), .95), PoseObservation(1, (.5, .36), (.5, .6), (.34, .22, .66, .84), .95)]
+    assert detect_fall_events(sitting) == []
+
+
+def test_missing_and_partial_pose_is_unknown():
+    missing = PoseObservation(0, None, None, None, 0.0)
+    partial = PoseObservation(1, (.5, .2), (.5, .5), (.4, .1, .6, .9), .3)
+    assert pose_signals(missing)["state"] == "unknown"
+    assert pose_signals(partial)["state"] == "unknown"
+    assert detect_fall_events([upright(0), missing, partial]) == []
+
+
+def test_recovery_does_not_create_second_event():
+    sequence = [upright(0), horizontal(.6), horizontal(1.0), upright(1.8), upright(2.4)]
+    assert len(detect_fall_events(sequence)) <= 1
+
