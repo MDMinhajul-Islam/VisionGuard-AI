@@ -18,12 +18,16 @@ A deliberately small SORT-like association layer matches same-class boxes by Int
 
 ## MediaPipe Pose Landmarker Lite
 
-The official float16 Pose Landmarker Lite task runs in `VIDEO` mode with monotonically increasing millisecond timestamps. The wrapper records shoulder/hip centers, pose bounding box, visibility, and frame ID. Missing or low-confidence evidence becomes `unknown`.
+The official float16 Pose Landmarker Lite task runs in `VIDEO` mode with monotonically increasing millisecond timestamps. The wrapper records all 33 landmarks, shoulder/hip centers, pose bounding box, visibility/presence, missing indices, source timestamp, nearest display-frame timestamp, and synchronization error. Missing or low-confidence evidence becomes `unknown`.
 
 ## Fall heuristic
 
-The temporal state machine combines torso angle, body aspect ratio, hip descent, upright-to-horizontal transition window, horizontal persistence, recovery, and visibility. It suppresses single-frame decisions. Sitting, crouching, intentional lying, occlusion, unusual camera angles, and truncation can still cause false results. Output is always **Potential Fall — Review Required**.
+The temporal state machine combines torso angle, body aspect ratio, hip descent, upright-to-horizontal transition window, causal median smoothing, horizontal persistence, recovery, continuity gaps, and visibility. Missing evidence cannot advance persistence; a long gap resets the candidate. Event end time extends while horizontal evidence persists. Stored explanation includes each triggering condition, torso angles, aspect ratios, vertical drop, persistence, visibility, missing indices, and the frozen profile. Sitting, crouching, intentional lying, occlusion, unusual camera angles, and truncation can still cause false results. Output is always **Potential Fall — Review Required**.
 
 ## Exit-zone heuristic
 
-Users define a normalized polygon named Emergency Exit / Keep Clear Zone. OpenCV polygon-box intersection estimates occupied zone fraction. Qualifying samples are grouped with a detection-gap tolerance and must persist before an event is emitted. Bounding-box overlap cannot prove that an exit is inaccessible. Output is always **Potential Exit Obstruction — Review Required**.
+Users define a normalized polygon named Emergency Exit / Keep Clear Zone. OpenCV polygon-box intersection estimates occupied zone fraction. Qualifying samples are grouped with a detection-gap tolerance and must persist before an event is emitted. Each candidate stores the zone, contributing bounding boxes, classes, detector confidences, track IDs, overlaps, timestamps, persistence, and frozen thresholds. Bounding-box overlap cannot prove that an exit is inaccessible. Output is always **Potential Exit Obstruction — Review Required**.
+
+## Threshold profiles
+
+The baseline and conservative example profiles live in `validation/profiles/`. Pose evidence confidence, fall transition/drop/persistence/gap/smoothing, zone overlap, obstruction persistence/gap, and event merging are request-configurable and saved with every job/event. The conservative file is an example, **not** a calibrated claim. Calibration data must remain separate from held-out evaluation data.

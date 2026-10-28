@@ -1,42 +1,47 @@
-# Phase 1 evaluation
+# Phase 1.5 evaluation
 
-Run date: 2026-10-28. Machine: Windows, Python 3.10.9, PyTorch 2.11.0+cu128, RTX 3050 Ti Laptop GPU (4 GiB), CUDA available. Raw machine-readable results are in [`evaluations/latest_results.json`](../evaluations/latest_results.json).
+Run date: 2026-10-28. Machine: Windows, Python 3.10.9, PyTorch 2.11.0+cu128, RTX 3050 Ti Laptop GPU (4 GiB), CUDA available. Raw results are in [`evaluations/latest_results.json`](../evaluations/latest_results.json) and [`evaluations/phase1_5_synthetic_fall.json`](../evaluations/phase1_5_synthetic_fall.json).
 
-## Test evidence
+## Verification
 
 | Scope | Result | Evidence type |
 |---|---:|---|
-| Backend unit + API tests | 20 passed, 3 deselected | deterministic and mocked API fixtures |
-| Real CLIP integration | passed | official ViT-B/32 image + text inference, 512-D finite normalized output |
-| Real detector integration | passed | official Torchvision Grace Hopper image, person confidence 0.9977 |
-| Real pose integration | passed | official MediaPipe pose image, shoulder/hip visibility 0.9974 |
-| Next.js production build | passed | TypeScript and route prerender build |
-| Chromium UI smoke test | 1 passed | Playwright, live frontend/backend/database |
+| Backend unit + API | 31 passed, 3 deselected | annotation, matching, rules, review consistency, evidence APIs |
+| Real model integration | 3 passed | CLIP image/text, SSDlite detection, MediaPipe pose |
+| Next.js production build | passed | TypeScript and nine prerendered routes |
+| ESLint | passed | zero errors; five intentional local dynamic-image warnings |
+| Chromium workflows | 2 passed | live DB/API, video decoding, overlays, frame stepping, validation |
 
-## Synthetic demo processing
+## Latest controlled processing
 
-The generated 8.0-second, 640×360 H.264 clip has four visibly labeled vector-drawn scenes. It is suitable for plumbing and retrieval, not safety accuracy.
+The only available video is the project-authored 8.0-second, 640×360 H.264 vector-drawn fixture. It is valid for plumbing and semantic retrieval, not safety accuracy.
 
 | Measurement | Actual result |
 |---|---:|
-| Total processing | 6.501 s |
-| Frame extraction | 16 frames / 0.126 s |
-| CLIP indexing | 8 frames / 0.328 s |
-| Object analysis | 12 stored detections / 1.579 s |
-| Detector inference mean | 76.27 ms per sampled frame |
-| Pose analysis | 40 frames / 10.43 ms mean inference |
-| Sufficient synthetic pose frames | 0 (expected for drawings) |
-| Model-generated fall/obstruction events | 0 / 0 |
+| Total processing | 7.163 s |
+| Frame extraction | 16 / 0.101 s |
+| CLIP indexing | 8 / 0.355 s |
+| Stored detector outputs | 12 / 1.542 s |
+| Mean detector inference | 74.80 ms/frame |
+| Pose frames | 40 |
+| Mean pose inference | 10.63 ms/frame |
+| Sufficient pose evidence | 0 (expected for drawings) |
+| Model fall / obstruction events | 0 / 0 |
 | Peak pipeline PyTorch allocation | 368.20 MiB |
+| 2.5-second MP4 export | 0.087 s |
+
+The separate real-image integration detected `person` on Torchvision's Grace Hopper fixture at confidence `0.9977`; MediaPipe returned shoulder/hip visibility `0.9974`. These checks prove execution, not video-event accuracy.
 
 ## Semantic retrieval
 
-Ground truth is the generator's four two-second scene intervals. With four queries, top-3 and 1.5-second suppression, every intended interval appeared in top 3: interval recall@3 = **1.00**; mean Precision@3 = **0.333**. First query incurred a 2699.7 ms lazy model load; subsequent queries took 9.7–12.0 ms. Mean including cold start was 682.9 ms. Similarities ranged around 0.21–0.30 and are not calibrated probabilities.
+Four known synthetic scene intervals were queried at top-3 with temporal suppression. Interval Recall@3 was **1.00** and mean Precision@3 **0.333**. The cold first query took 2768.3 ms; warm queries took 10.8–15.3 ms. Mean including load was 702.4 ms. Similarity values are uncalibrated.
 
-## Export
+## Event evaluation semantics
 
-FFmpeg re-encoded a requested 2.5-second event segment in 0.074 s. Source hash preservation was covered by implementation and the source file was not opened for writing.
+Predictions and positive ground truth use greedy one-to-one matching. A pair matches at temporal IoU ≥ 0.3 or absolute onset error ≤ 1.0 second. Reported delay is `predicted_start - ground_truth_start`; localization error is its absolute value. Uncertain annotations are excluded. Splits are explicit.
 
-## What was not evaluated
+The synthetic manifest declares `no_event` for falls and the model emitted no fall prediction. This is a successful deterministic no-alert case, but there are zero positive events. Therefore precision, recall, and F1 are correctly **undefined (`null`)**, not 0% or 100%. There are no empirical false-positive/false-negative safety examples because no real event dataset exists.
 
-No authorized staged fall or physical exit-obstruction video was available. Therefore event precision, recall, false-alert rate, timing error, and operational reliability are **unmeasured**. Deterministic state-machine/geometry tests and separate real pose/detector inference do not establish end-to-end safety performance. Object-detection mAP was not recomputed; no labeled detection dataset was introduced. Previous CLIP CIFAR-10 numbers are intentionally excluded.
+## Unmeasured
+
+No consented/licensed staged fall or physical obstruction video was present. Fall/obstruction event precision, recall, F1, false alerts, missed events, delay, localization error, and generalization remain unmeasured. Deterministic sequences and separate real-model images cannot close this gap. CIFAR-10 results remain excluded.

@@ -10,7 +10,7 @@ type Response={query:string;model:string;score_warning:string;elapsed_ms:number;
 
 export default function SearchPage(){
  const [videos,setVideos]=useState<Video[]>([]);const [videoId,setVideoId]=useState("");const [query,setQuery]=useState("Someone carrying a cardboard box.");const [topK,setTopK]=useState(5);const [result,setResult]=useState<Response|null>(null);const [error,setError]=useState("");const [loading,setLoading]=useState(false);const player=useRef<HTMLVideoElement>(null);
- useEffect(()=>{request<Video[]>("/api/videos").then(data=>{setVideos(data.filter(v=>v.status==="indexed"));if(!videoId){setVideoId(data.find(v=>v.status==="indexed")?.id??"")}}).catch(e=>setError(e.message))},[]);
+ useEffect(()=>{request<Video[]>("/api/videos").then(data=>{const indexed=data.filter(v=>v.status==="indexed");setVideos(indexed);setVideoId(indexed[0]?.id??"")}).catch(e=>setError(e.message))},[]);
  const selected=videos.find(v=>v.id===videoId);
  async function search(event:FormEvent){event.preventDefault();if(!videoId)return;setLoading(true);setError("");try{setResult(await request<Response>(`/api/videos/${videoId}/search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,top_k:topK,temporal_suppression_seconds:2})}))}catch(e){setError((e as Error).message)}finally{setLoading(false)}}
  function seek(seconds:number){if(player.current){player.current.currentTime=seconds;player.current.play().catch(()=>{})}}

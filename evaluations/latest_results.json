@@ -23,18 +23,18 @@
   },
   "pipeline_metrics": {
     "frames_extracted": 16,
-    "frame_extraction_seconds": 0.12602029999834485,
+    "frame_extraction_seconds": 0.10084559999813791,
     "clip_frames": 8,
-    "clip_indexing_seconds": 0.32775910000054864,
+    "clip_indexing_seconds": 0.3545897999974841,
     "object_detections": 12,
-    "detection_seconds": 1.5794427000000724,
-    "average_detector_inference_ms": 76.26750000008542,
+    "detection_seconds": 1.5419221999982256,
+    "average_detector_inference_ms": 74.8021250005877,
     "pose_frames": 40,
     "potential_fall_events": 0,
-    "average_pose_inference_ms": 10.430607499438338,
+    "average_pose_inference_ms": 10.629145000439166,
     "pose_frames_with_sufficient_evidence": 0,
     "potential_obstruction_events": 0,
-    "total_processing_seconds": 6.501094300001569,
+    "total_processing_seconds": 7.1632935000016005,
     "peak_gpu_memory_mib": 368.20458984375
   },
   "semantic_retrieval": {
@@ -47,24 +47,24 @@
         ],
         "top3": [
           {
-            "frame_id": "420344c9-014d-4d53-b031-4c6f8390e81b",
+            "frame_id": "a9895041-c59f-4e92-b36d-1bf8a4f5d3c5",
             "timestamp_seconds": 1.0,
             "similarity": 0.24183356761932373
           },
           {
-            "frame_id": "a033ff08-0b74-4efb-a918-574043e67505",
+            "frame_id": "5d0c7db7-6948-476a-b5f0-cdb76bf6e4dc",
             "timestamp_seconds": 3.0,
             "similarity": 0.23018667101860046
           },
           {
-            "frame_id": "c21306df-a8a1-43b0-85b6-66211b4b547d",
+            "frame_id": "5d4b369f-4727-4f3c-b60d-6c16ec0badd4",
             "timestamp_seconds": 5.0,
             "similarity": 0.21970519423484802
           }
         ],
         "precision_at_3": 0.3333333333333333,
         "interval_retrieved_at_3": true,
-        "search_ms": 2699.7387999981584
+        "search_ms": 2768.3423000016774
       },
       {
         "query": "Someone carrying a cardboard box.",
@@ -74,24 +74,24 @@
         ],
         "top3": [
           {
-            "frame_id": "a033ff08-0b74-4efb-a918-574043e67505",
+            "frame_id": "5d0c7db7-6948-476a-b5f0-cdb76bf6e4dc",
             "timestamp_seconds": 3.0,
             "similarity": 0.26575997471809387
           },
           {
-            "frame_id": "31948f50-2be5-4e73-b49b-b4a097fb054a",
+            "frame_id": "3a25cebe-a007-4fff-8db7-0c6a4d950466",
             "timestamp_seconds": 7.0,
             "similarity": 0.22788910567760468
           },
           {
-            "frame_id": "c21306df-a8a1-43b0-85b6-66211b4b547d",
+            "frame_id": "5d4b369f-4727-4f3c-b60d-6c16ec0badd4",
             "timestamp_seconds": 5.0,
             "similarity": 0.2110372930765152
           }
         ],
         "precision_at_3": 0.3333333333333333,
         "interval_retrieved_at_3": true,
-        "search_ms": 10.181800000282237
+        "search_ms": 10.774999998830026
       },
       {
         "query": "An object placed on the floor near an exit.",
@@ -101,24 +101,24 @@
         ],
         "top3": [
           {
-            "frame_id": "c21306df-a8a1-43b0-85b6-66211b4b547d",
+            "frame_id": "5d4b369f-4727-4f3c-b60d-6c16ec0badd4",
             "timestamp_seconds": 5.0,
             "similarity": 0.26568034291267395
           },
           {
-            "frame_id": "31948f50-2be5-4e73-b49b-b4a097fb054a",
+            "frame_id": "3a25cebe-a007-4fff-8db7-0c6a4d950466",
             "timestamp_seconds": 7.0,
             "similarity": 0.26439231634140015
           },
           {
-            "frame_id": "a033ff08-0b74-4efb-a918-574043e67505",
+            "frame_id": "5d0c7db7-6948-476a-b5f0-cdb76bf6e4dc",
             "timestamp_seconds": 3.0,
             "similarity": 0.20695888996124268
           }
         ],
         "precision_at_3": 0.3333333333333333,
         "interval_retrieved_at_3": true,
-        "search_ms": 11.999099999229657
+        "search_ms": 15.32750000114902
       },
       {
         "query": "A clear emergency exit and empty walkway.",
@@ -128,35 +128,35 @@
         ],
         "top3": [
           {
-            "frame_id": "31948f50-2be5-4e73-b49b-b4a097fb054a",
+            "frame_id": "3a25cebe-a007-4fff-8db7-0c6a4d950466",
             "timestamp_seconds": 7.0,
             "similarity": 0.29993507266044617
           },
           {
-            "frame_id": "c21306df-a8a1-43b0-85b6-66211b4b547d",
+            "frame_id": "5d4b369f-4727-4f3c-b60d-6c16ec0badd4",
             "timestamp_seconds": 5.0,
             "similarity": 0.25938349962234497
           },
           {
-            "frame_id": "a033ff08-0b74-4efb-a918-574043e67505",
+            "frame_id": "5d0c7db7-6948-476a-b5f0-cdb76bf6e4dc",
             "timestamp_seconds": 3.0,
             "similarity": 0.19213451445102692
           }
         ],
         "precision_at_3": 0.3333333333333333,
         "interval_retrieved_at_3": true,
-        "search_ms": 9.66590000098222
+        "search_ms": 15.1676999994379
       }
     ],
     "mean_precision_at_3": 0.3333333333333333,
     "interval_recall_at_3": 1.0,
-    "mean_search_ms": 682.8963999996631
+    "mean_search_ms": 702.4031250002736
   },
   "real_model_integration": {
     "clip": "passed via index and query embeddings",
     "object_detector": {
       "passed": true,
-      "inference_ms_including_loaded_call": 468.3511000002909,
+      "inference_ms_including_loaded_call": 527.2887999999512,
       "detections": [
         {
           "label": "person",
@@ -166,12 +166,12 @@
     },
     "pose": {
       "passed": true,
-      "inference_ms": 785.2142000010645,
+      "inference_ms": 815.8650000004855,
       "visibility": 0.9973544875780741
     }
   },
   "export": {
-    "seconds": 0.07429430000047432,
+    "seconds": 0.0873637000004237,
     "duration_seconds": 2.5
   },
   "gpu_peak_allocated_mib": 384.40283203125

@@ -14,6 +14,26 @@ export type EventCandidate = {
   synthetic_fixture: boolean; created_at: string;
 };
 
+export type EvidenceFrame = {
+  id: string; timestamp_seconds: number; is_supporting: boolean;
+  image_url: string; overlay_url: string; evidence_url: string;
+};
+
+export type EventEvidence = {event: EventCandidate; frames: EvidenceFrame[]};
+
+export type FrameEvidence = {
+  frame_id: string; timestamp_seconds: number; image_url: string; overlay_url: string;
+  detections: {id:string;label:string;confidence:number;bbox:number[];track_id:number|null}[];
+  pose_samples: {timestamp_seconds:number;frame_timestamp_seconds:number;sync_error_seconds:number;landmarks:Record<string,number>[];signals:Record<string,unknown>;sufficient_evidence:boolean}[];
+  zones: {id:string;name:string;polygon:number[][]}[];
+};
+
+export type ValidationAnnotation = {
+  id:string;video_id:string;event_type:string;start_seconds:number;end_seconds:number;
+  ground_truth_label:string;annotation_source:string;reviewer_note:string;
+  query_text:string|null;split:string;created_at:string;
+};
+
 export function asset(path?: string | null) {
   if (!path) return "";
   return path.startsWith("http") ? path : `${API_BASE}${path}`;

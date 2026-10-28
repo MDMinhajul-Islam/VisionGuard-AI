@@ -1,0 +1,29 @@
+{
+  "true_positives": 0,
+  "false_positives": 0,
+  "false_negatives": 0,
+  "precision": null,
+  "recall": null,
+  "f1": null,
+  "mean_detection_delay_seconds": null,
+  "mean_timestamp_localization_error_seconds": null,
+  "matches": [],
+  "false_positive_examples": [],
+  "false_negative_examples": [],
+  "protocol": {
+    "matching": "greedy one-to-one",
+    "temporal_iou_threshold": 0.3,
+    "onset_tolerance_seconds": 1.0
+  },
+  "undefined_metrics": [
+    "precision",
+    "recall",
+    "f1"
+  ],
+  "video_id": "9855b5d1-9552-4205-9975-6d23c37a4219",
+  "event_type": "potential_fall",
+  "split": "development",
+  "prediction_count": 0,
+  "positive_ground_truth_count": 0,
+  "warning": "Small local-set metrics do not establish generalization or operational safety."
+}

@@ -21,7 +21,7 @@ sequenceDiagram
   API->>DB: queued job + frozen configuration
   API-->>Worker: enqueue job ID
   Worker->>CV: bounded sampled frames, sequential models
-  Worker->>DB: frames, detections, tracks, candidates, metrics
+  Worker->>DB: frames, detections, pose evidence, tracks, candidates, metrics
   User->>UI: text query / review / export
   UI->>API: search, PATCH review, POST export
   API->>DB: normalized evidence and human decision
@@ -45,13 +45,21 @@ CLIP embeddings are L2-normalized and stored in compressed NumPy arrays alongsid
 
 The pose state machine requires an observed upright state, rapid hip descent, a horizontal torso/body signal, and persistence. Low visibility or missing landmarks is `unknown`, not a fall. Zone obstruction requires a manually defined normalized polygon, detector-box intersection, minimum zone occupancy, temporal persistence, gap tolerance, and event merging. Both create pending candidates only.
 
+Pose samples store their original sample timestamp, associated display-frame timestamp, absolute synchronization error, 33 landmarks, missing indicators, and derived signals. Combined overlays are rendered on demand from one `VideoFrame` ID, its actual detections, closest recorded pose sample, and all configured zones. A long pose gap resets rather than advances a fall candidate.
+
 ## Data model
 
-`Video` owns `ProcessingJob`, `VideoFrame`, `ObjectDetection`, `SafetyZone`, `CandidateEvent`, `EmbeddingCache`, and `ExportedClip`. Candidate events persist raw signals, frozen thresholds, model version, supporting frame IDs, source method, synthetic-fixture provenance, review state, note, and timestamps. Foreign keys and frequently queried video/status/time fields are indexed.
+`Video` owns `ProcessingJob`, `VideoFrame`, `ObjectDetection`, `PoseEvidence`, `SafetyZone`, `CandidateEvent`, `ValidationAnnotation`, `EmbeddingCache`, and `ExportedClip`. Ground truth is a separate table and never overwrites predictions. Annotation IDs are deterministic hashes of canonical validated content. Candidate events persist raw signals, frozen thresholds, model version, supporting frame IDs, source method, synthetic-fixture provenance, review state, note, and timestamps. Foreign keys and frequently queried video/status/time fields are indexed.
+
+Reprocessing is rejected by default when reviewed model events exist, preventing silent loss of human decisions. Zone re-analysis deletes only pending derived events and preserves already-reviewed events. Cancelled work removes partial analysis rows/files. Reprocessing resets thumbnail provenance before replacing frames.
 
 ## API contract
 
-Primary routes are `/api/videos/upload`, `/api/videos`, `/api/videos/{id}/process`, `/api/jobs/{id}`, `/api/videos/{id}/search`, `/detections`, `/events`, `/zones`, `/api/events/{id}/review`, `/export`, `/api/system/info`, and `/api/health`. Pydantic bounds all user-controlled numeric/string values. FastAPI publishes the exact OpenAPI schema at local `/docs`.
+Primary routes are `/api/videos/upload`, `/api/videos`, `/api/videos/{id}/process`, `/api/jobs/{id}`, `/api/videos/{id}/search`, `/detections`, `/events`, `/zones`, `/api/events/{id}/evidence`, `/api/frames/{id}/evidence`, `/api/events/{id}/review`, `/api/validation/annotations`, `/api/videos/{id}/evaluate`, `/export`, `/api/system/info`, and `/api/health`. Pydantic bounds all user-controlled numeric/string values. FastAPI publishes the exact OpenAPI schema at local `/docs`.
+
+## Evaluation protocol
+
+Event matching is greedy one-to-one using temporal IoU (`0.3` baseline) or onset tolerance (`1.0 s` baseline). One prediction cannot match multiple labels, so adjacent frames cannot inflate true positives. Precision/recall/F1 are `null` when their denominators are undefined. Development, calibration, and held-out evaluation splits are distinct annotation fields.
 
 ## Export
 

@@ -10,9 +10,11 @@ This repository is independent from the OpenAI CLIP source repository. It consum
 - Actual OpenAI CLIP ViT-B/32 image/text inference, normalized 512-D embedding cache, top-K retrieval, and temporal suppression.
 - Actual Torchvision SSDLite320 MobileNetV3 COCO inference, bounding-box overlays, confidence filtering, and temporary per-video IoU tracks.
 - MediaPipe Pose Landmarker in VIDEO mode plus a conservative temporal fall-candidate state machine.
+- Persisted 33-landmark pose evidence, missing-landmark indicators, timing offsets, and explainable trigger measurements.
 - User-defined keep-clear polygons, overlap/persistence logic, candidate merging, evidence, and human review state.
+- Deterministic ground-truth annotations and one-to-one event-level precision/recall/F1/delay evaluation.
 - SQLite metadata, local artifact storage, video seeking, event notes, and safe FFmpeg MP4 export.
-- Six-page Next.js dashboard backed entirely by real API/database state.
+- Interactive original/overlay frame viewer and validation dashboard backed entirely by real API/database state.
 
 Safety outputs are candidates only: **Potential Fall — Review Required** and **Potential Exit Obstruction — Review Required**. The included safety event is explicitly marked as a synthetic UI fixture, not model evidence.
 
@@ -34,7 +36,9 @@ flowchart LR
   N --> E[Human decision + clip export]
 ```
 
-See [Architecture](docs/ARCHITECTURE.md), [Models](docs/MODELS.md), [Evaluation](docs/EVALUATION.md), [Safety](docs/SAFETY_AND_LIMITATIONS.md), and the [2–3 minute demo](docs/DEMO_GUIDE.md).
+See [Architecture](docs/ARCHITECTURE.md), [Models](docs/MODELS.md), [Evaluation](docs/EVALUATION.md), [Real-video validation](docs/REAL_VIDEO_VALIDATION.md), [Phase 1.5 audit](docs/PHASE_1_5_AUDIT.md), [Safety](docs/SAFETY_AND_LIMITATIONS.md), and the [2–3 minute demo](docs/DEMO_GUIDE.md).
+
+![Event evidence viewer](docs/images/phase1-5-evidence-viewer.png)
 
 ## Windows setup
 
@@ -98,7 +102,14 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Latest verified evidence is in [evaluations/latest_results.json](evaluations/latest_results.json). On the local RTX 3050 Ti run, 20 deterministic/API tests and 3 real-model tests passed; the Next.js production build and Chromium smoke test also passed. These are engineering checks, not safety accuracy claims.
+Latest verified evidence is in [evaluations/latest_results.json](evaluations/latest_results.json). On the local RTX 3050 Ti run, 31 deterministic/API tests and 3 real-model tests passed; the Next.js production build and two Chromium workflows also passed. These are engineering checks, not safety accuracy claims.
+
+Ground-truth manifests can be validated/imported without changing application code:
+
+```powershell
+.\.venv\Scripts\python .\scripts\import_validation_manifest.py .\validation\manifests\your-dataset.json --video-id YOUR_LOCAL_VIDEO_ID
+.\.venv\Scripts\python .\scripts\evaluate_validation.py --video-id YOUR_LOCAL_VIDEO_ID --event-type potential_fall --split evaluation
+```
 
 ## Storage and privacy
 
@@ -116,5 +127,6 @@ VisionGuard source is MIT licensed. OpenAI CLIP is MIT licensed and governed by 
 - COCO SSDLite does not provide reliable helmet, vest, exit-sign, smoke, fire, or generic hazard classes.
 - The SQLite queue is one-process/local and is not durable against a host process crash.
 - Temporary track IDs exist only within one recording; there is no re-identification.
+- No appropriately licensed/consented staged fall or physical obstruction video was present, so real safety-event precision/recall remains undefined.
 
 The highest-value next milestone is a small, consented, staged and frame/event-labeled validation set for falls and keep-clear zones, followed by threshold calibration and event-level error analysis.

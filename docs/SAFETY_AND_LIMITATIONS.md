@@ -16,9 +16,13 @@ CLIP similarities are ranking scores, not calibrated event probabilities. Its or
 
 All machine-created events start `pending`. Only a person can select `confirmed by reviewer`; reviewer notes and timestamps remain stored. A positive candidate must be checked against the source clip, context, zone definition, occlusion, camera position, and applicable procedure. A missing event does not imply a safe scene.
 
+Ground-truth annotations are stored independently from predictions. Reprocessing is blocked by default when reviewed model evidence exists. Zone re-analysis preserves reviewed candidates. Synthetic fixtures carry explicit database provenance and prominent UI labels.
+
 ## Error modes
 
 Fall heuristics can confuse sitting, bending, crouching, intentional lying, abrupt camera motion, occlusion, and truncation. The explicit `unknown` state avoids forcing a conclusion when landmarks are weak but cannot eliminate errors. Exit obstruction uses box/polygon overlap and cannot reason about depth, navigable clearance, door function, or accessibility. COCO classes omit many industrial hazards. Synthetic fixtures test code paths, not the physical world.
+
+Metrics from zero positive events are undefined. A no-alert synthetic interval must never be described as evidence of fall recall. Tiny development/calibration sets must not be reused as unbiased held-out performance claims.
 
 ## Privacy and handling
 

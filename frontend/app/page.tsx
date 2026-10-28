@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect, useState} from "react";
-import {Activity, ArrowRight, Database, Film, Search, ShieldCheck} from "lucide-react";
+import {ArrowRight, Database, Film, Search, ShieldCheck} from "lucide-react";
 import {Card, ErrorBox, Metric, ResearchBanner} from "@/components/ui";
 import {request} from "@/lib/api";
 
