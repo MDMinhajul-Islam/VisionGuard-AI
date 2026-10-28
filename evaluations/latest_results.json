@@ -1,0 +1,178 @@
+{
+  "scope": {
+    "demo_video": "synthetic generated fixture",
+    "semantic_ground_truth": "text-labeled synthetic scene intervals",
+    "safety_accuracy_claim": "none",
+    "full_staged_fall_validation": false,
+    "full_staged_exit_obstruction_validation": false
+  },
+  "hardware": {
+    "pytorch": "2.11.0+cu128",
+    "cuda_available": true,
+    "cuda_runtime": "12.8",
+    "gpu": "NVIDIA GeForce RTX 3050 Ti Laptop GPU"
+  },
+  "video": {
+    "id": "9855b5d1-9552-4205-9975-6d23c37a4219",
+    "duration_seconds": 8.0,
+    "resolution": [
+      640,
+      360
+    ],
+    "codec": "h264"
+  },
+  "pipeline_metrics": {
+    "frames_extracted": 16,
+    "frame_extraction_seconds": 0.12602029999834485,
+    "clip_frames": 8,
+    "clip_indexing_seconds": 0.32775910000054864,
+    "object_detections": 12,
+    "detection_seconds": 1.5794427000000724,
+    "average_detector_inference_ms": 76.26750000008542,
+    "pose_frames": 40,
+    "potential_fall_events": 0,
+    "average_pose_inference_ms": 10.430607499438338,
+    "pose_frames_with_sufficient_evidence": 0,
+    "potential_obstruction_events": 0,
+    "total_processing_seconds": 6.501094300001569,
+    "peak_gpu_memory_mib": 368.20458984375
+  },
+  "semantic_retrieval": {
+    "queries": [
+      {
+        "query": "People participating in a workshop.",
+        "expected_synthetic_interval": [
+          0,
+          2
+        ],
+        "top3": [
+          {
+            "frame_id": "420344c9-014d-4d53-b031-4c6f8390e81b",
+            "timestamp_seconds": 1.0,
+            "similarity": 0.24183356761932373
+          },
+          {
+            "frame_id": "a033ff08-0b74-4efb-a918-574043e67505",
+            "timestamp_seconds": 3.0,
+            "similarity": 0.23018667101860046
+          },
+          {
+            "frame_id": "c21306df-a8a1-43b0-85b6-66211b4b547d",
+            "timestamp_seconds": 5.0,
+            "similarity": 0.21970519423484802
+          }
+        ],
+        "precision_at_3": 0.3333333333333333,
+        "interval_retrieved_at_3": true,
+        "search_ms": 2699.7387999981584
+      },
+      {
+        "query": "Someone carrying a cardboard box.",
+        "expected_synthetic_interval": [
+          2,
+          4
+        ],
+        "top3": [
+          {
+            "frame_id": "a033ff08-0b74-4efb-a918-574043e67505",
+            "timestamp_seconds": 3.0,
+            "similarity": 0.26575997471809387
+          },
+          {
+            "frame_id": "31948f50-2be5-4e73-b49b-b4a097fb054a",
+            "timestamp_seconds": 7.0,
+            "similarity": 0.22788910567760468
+          },
+          {
+            "frame_id": "c21306df-a8a1-43b0-85b6-66211b4b547d",
+            "timestamp_seconds": 5.0,
+            "similarity": 0.2110372930765152
+          }
+        ],
+        "precision_at_3": 0.3333333333333333,
+        "interval_retrieved_at_3": true,
+        "search_ms": 10.181800000282237
+      },
+      {
+        "query": "An object placed on the floor near an exit.",
+        "expected_synthetic_interval": [
+          4,
+          6
+        ],
+        "top3": [
+          {
+            "frame_id": "c21306df-a8a1-43b0-85b6-66211b4b547d",
+            "timestamp_seconds": 5.0,
+            "similarity": 0.26568034291267395
+          },
+          {
+            "frame_id": "31948f50-2be5-4e73-b49b-b4a097fb054a",
+            "timestamp_seconds": 7.0,
+            "similarity": 0.26439231634140015
+          },
+          {
+            "frame_id": "a033ff08-0b74-4efb-a918-574043e67505",
+            "timestamp_seconds": 3.0,
+            "similarity": 0.20695888996124268
+          }
+        ],
+        "precision_at_3": 0.3333333333333333,
+        "interval_retrieved_at_3": true,
+        "search_ms": 11.999099999229657
+      },
+      {
+        "query": "A clear emergency exit and empty walkway.",
+        "expected_synthetic_interval": [
+          6,
+          8
+        ],
+        "top3": [
+          {
+            "frame_id": "31948f50-2be5-4e73-b49b-b4a097fb054a",
+            "timestamp_seconds": 7.0,
+            "similarity": 0.29993507266044617
+          },
+          {
+            "frame_id": "c21306df-a8a1-43b0-85b6-66211b4b547d",
+            "timestamp_seconds": 5.0,
+            "similarity": 0.25938349962234497
+          },
+          {
+            "frame_id": "a033ff08-0b74-4efb-a918-574043e67505",
+            "timestamp_seconds": 3.0,
+            "similarity": 0.19213451445102692
+          }
+        ],
+        "precision_at_3": 0.3333333333333333,
+        "interval_retrieved_at_3": true,
+        "search_ms": 9.66590000098222
+      }
+    ],
+    "mean_precision_at_3": 0.3333333333333333,
+    "interval_recall_at_3": 1.0,
+    "mean_search_ms": 682.8963999996631
+  },
+  "real_model_integration": {
+    "clip": "passed via index and query embeddings",
+    "object_detector": {
+      "passed": true,
+      "inference_ms_including_loaded_call": 468.3511000002909,
+      "detections": [
+        {
+          "label": "person",
+          "confidence": 0.997654139995575
+        }
+      ]
+    },
+    "pose": {
+      "passed": true,
+      "inference_ms": 785.2142000010645,
+      "visibility": 0.9973544875780741
+    }
+  },
+  "export": {
+    "seconds": 0.07429430000047432,
+    "duration_seconds": 2.5
+  },
+  "gpu_peak_allocated_mib": 384.40283203125
+}
