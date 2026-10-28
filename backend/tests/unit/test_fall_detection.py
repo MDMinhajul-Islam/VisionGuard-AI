@@ -1,3 +1,5 @@
+import pytest
+
 from app.vision.fall_detection import PoseObservation, detect_fall_events, pose_signals
 
 
@@ -38,4 +40,17 @@ def test_missing_and_partial_pose_is_unknown():
 def test_recovery_does_not_create_second_event():
     sequence = [upright(0), horizontal(.6), horizontal(1.0), upright(1.8), upright(2.4)]
     assert len(detect_fall_events(sequence)) <= 1
+
+
+def test_long_pose_tracking_interruption_cancels_candidate():
+    sequence = [upright(0), horizontal(.4), PoseObservation(1.2, None, None, None, 0), horizontal(1.4), horizontal(2.1)]
+    assert detect_fall_events(sequence, max_pose_gap=.5) == []
+
+
+def test_event_end_extends_while_horizontal_and_evidence_explains_trigger():
+    sequence = [upright(0, frame="u"), horizontal(.5, frame="h1"), horizontal(1.1, frame="h2"), horizontal(1.6, frame="h3")]
+    event = detect_fall_events(sequence)[0]
+    assert event.end_seconds == 1.6
+    assert event.evidence["trigger_conditions"]["vertical_drop_met"] is True
+    assert event.evidence["horizontal_persistence_seconds"] == pytest.approx(1.1)
 

@@ -1,0 +1,14 @@
+{
+  "profile_name": "baseline",
+  "pose_confidence_threshold": 0.5,
+  "fall_transition_window": 1.5,
+  "fall_min_vertical_drop": 0.12,
+  "fall_horizontal_persistence": 0.6,
+  "pose_max_gap": 0.6,
+  "pose_smoothing_window": 3,
+  "zone_overlap_threshold": 0.15,
+  "obstruction_persistence": 2.0,
+  "obstruction_max_gap": 1.0,
+  "event_merge_interval": 1.0,
+  "status": "baseline_not_calibrated"
+}

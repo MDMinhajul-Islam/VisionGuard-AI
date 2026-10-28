@@ -14,20 +14,23 @@ import torchvision
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app import __version__
 from app.core.config import get_settings
 from app.database import get_db, init_db
 from app.database.models import (
-    CandidateEvent, EmbeddingCache, ExportedClip, ObjectDetection, ProcessingJob,
-    SafetyZone, Video, VideoFrame,
+    CandidateEvent, EmbeddingCache, ExportedClip, ObjectDetection, PoseEvidence,
+    ProcessingJob, SafetyZone, ValidationAnnotation, Video, VideoFrame,
 )
 from app.schemas.api import (
-    ExportRequest, JobOut, ProcessRequest, ReviewUpdate, SearchRequest, SearchResponse,
-    SearchResult, VideoOut, ZoneCreate,
+    AnnotationCreate, AnnotationOut, EvaluationRequest, ExportRequest, JobOut,
+    ProcessRequest, ReviewUpdate, SearchRequest, SearchResponse, SearchResult,
+    VideoOut, ZoneAnalysisRequest, ZoneCreate,
 )
+from app.evaluation.annotations import deterministic_annotation_id
+from app.evaluation.metrics import IntervalEvent, evaluate_events, temporal_iou
 from app.services.exporter import export_clip
 from app.services.video_io import SUPPORTED_EXTENSIONS, find_binary, probe_video, render_overlay, safe_within
 from app.vision.clip_engine import clip_engine
@@ -192,6 +195,16 @@ def process_video(video_id: str, request: ProcessRequest, db: Session = Depends(
     active = db.scalar(select(ProcessingJob).where(ProcessingJob.video_id == video_id, ProcessingJob.status.in_(["queued", "running"])))
     if active:
         raise HTTPException(409, "video already has an active processing job")
+    reviewed = db.scalar(select(func.count()).select_from(CandidateEvent).where(
+        CandidateEvent.video_id == video_id,
+        CandidateEvent.synthetic_fixture.is_(False),
+        CandidateEvent.review_status != "pending",
+    )) or 0
+    if reviewed and not request.allow_reprocess_reviewed:
+        raise HTTPException(409, detail={
+            "code": "reviewed_events_exist",
+            "message": "Reprocessing would invalidate reviewed model evidence. Export/preserve it first or explicitly set allow_reprocess_reviewed=true.",
+        })
     job = ProcessingJob(video_id=video_id, config_json=request.model_dump_json())
     db.add(job)
     db.commit()
@@ -259,12 +272,43 @@ def frame_overlay(frame_id: str, db: Session = Depends(get_db)):
     for row in rows:
         x1, y1, x2, y2 = json.loads(row.bbox_json)
         detections.append({"label": row.label, "confidence": row.confidence, "track_id": row.track_id, "bbox_pixels": (x1 * frame.width, y1 * frame.height, x2 * frame.width, y2 * frame.height)})
-    zone = db.scalar(select(SafetyZone).where(SafetyZone.video_id == frame.video_id))
-    rendered = render_overlay(image, detections, json.loads(zone.polygon_json) if zone else None)
+    zones = db.scalars(select(SafetyZone).where(SafetyZone.video_id == frame.video_id)).all()
+    poses = db.scalars(select(PoseEvidence).where(PoseEvidence.frame_id == frame_id)).all()
+    pose = min(poses, key=lambda item: abs(item.timestamp_seconds - frame.timestamp_seconds)) if poses else None
+    rendered = render_overlay(
+        image, detections, [json.loads(zone.polygon_json) for zone in zones],
+        json.loads(pose.landmarks_json) if pose else None,
+    )
     ok, encoded = cv2.imencode(".jpg", rendered)
     if not ok:
         raise HTTPException(500, "overlay encoding failed")
     return __import__("fastapi").responses.Response(content=encoded.tobytes(), media_type="image/jpeg")
+
+
+@app.get("/api/frames/{frame_id}/evidence")
+def frame_evidence(frame_id: str, db: Session = Depends(get_db)):
+    frame = db.get(VideoFrame, frame_id)
+    if not frame:
+        raise HTTPException(404, "frame not found")
+    detections = db.scalars(select(ObjectDetection).where(ObjectDetection.frame_id == frame_id)).all()
+    poses = db.scalars(select(PoseEvidence).where(PoseEvidence.frame_id == frame_id).order_by(PoseEvidence.sync_error_seconds)).all()
+    zones = db.scalars(select(SafetyZone).where(SafetyZone.video_id == frame.video_id)).all()
+    return {
+        "frame_id": frame.id, "timestamp_seconds": frame.timestamp_seconds,
+        "image_url": f"/api/frames/{frame.id}/image", "overlay_url": f"/api/frames/{frame.id}/overlay",
+        "detections": [{
+            "id": item.id, "label": item.label, "confidence": item.confidence,
+            "bbox": json.loads(item.bbox_json), "track_id": item.track_id,
+        } for item in detections],
+        "pose_samples": [{
+            "timestamp_seconds": item.timestamp_seconds,
+            "frame_timestamp_seconds": item.frame_timestamp_seconds,
+            "sync_error_seconds": item.sync_error_seconds,
+            "landmarks": json.loads(item.landmarks_json), "signals": json.loads(item.signals_json),
+            "sufficient_evidence": item.sufficient_evidence,
+        } for item in poses],
+        "zones": [{"id": item.id, "name": item.name, "polygon": json.loads(item.polygon_json)} for item in zones],
+    }
 
 
 @app.get("/api/videos/{video_id}/detections")
@@ -290,21 +334,51 @@ def zones(video_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/{video_id}/zones/analyze")
-def analyze_zones(video_id: str, db: Session = Depends(get_db)):
+def analyze_zones(video_id: str, request: ZoneAnalysisRequest = ZoneAnalysisRequest(), db: Session = Depends(get_db)):
     zone_rows = db.scalars(select(SafetyZone).where(SafetyZone.video_id == video_id)).all()
     detection_rows = db.scalars(select(ObjectDetection).where(ObjectDetection.video_id == video_id)).all()
-    db.query(CandidateEvent).filter(CandidateEvent.video_id == video_id, CandidateEvent.event_type.in_(["potential_exit_obstruction", "potential_walkway_obstruction"])).delete(synchronize_session=False)
+    reviewed_events = db.scalars(select(CandidateEvent).where(
+        CandidateEvent.video_id == video_id,
+        CandidateEvent.event_type.in_(["potential_exit_obstruction", "potential_walkway_obstruction"]),
+        CandidateEvent.review_status != "pending",
+    )).all()
+    db.execute(delete(CandidateEvent).where(
+        CandidateEvent.video_id == video_id,
+        CandidateEvent.event_type.in_(["potential_exit_obstruction", "potential_walkway_obstruction"]),
+        CandidateEvent.review_status == "pending",
+    ))
     created = []
     for zone in zone_rows:
-        samples = [ObstructionSample(row.timestamp_seconds, row.label, tuple(json.loads(row.bbox_json)), row.confidence, row.frame_id) for row in detection_rows]
-        for event in detect_persistent_obstructions(samples, json.loads(zone.polygon_json)):
+        polygon = json.loads(zone.polygon_json)
+        samples = [ObstructionSample(row.timestamp_seconds, row.label, tuple(json.loads(row.bbox_json)), row.confidence, row.frame_id, row.track_id) for row in detection_rows]
+        for event in detect_persistent_obstructions(
+            samples, polygon, request.min_zone_occupancy, request.min_duration,
+            request.max_gap, request.event_merge_interval,
+        ):
+            event_type = "potential_exit_obstruction" if zone.zone_type == "emergency_exit" else "potential_walkway_obstruction"
+            proposed = IntervalEvent("proposed", event.start_seconds, event.end_seconds, event_type)
+            if any(
+                json.loads(item.raw_scores_json).get("zone_id") == zone.id
+                and temporal_iou(proposed, IntervalEvent(item.id, item.start_seconds, item.end_seconds, item.event_type)) >= 0.5
+                for item in reviewed_events
+            ):
+                continue
             candidate = CandidateEvent(
-                video_id=video_id, event_type="potential_exit_obstruction" if zone.zone_type == "emergency_exit" else "potential_walkway_obstruction",
+                video_id=video_id, event_type=event_type,
                 label="Potential Exit Obstruction — Review Required" if zone.zone_type == "emergency_exit" else "Potential Walkway Obstruction — Review Required",
                 start_seconds=event.start_seconds, end_seconds=event.end_seconds,
                 processing_method="manual_zone_bbox_persistence", model_version=object_detector.model_name,
-                raw_scores_json=json.dumps({"max_zone_occupancy": event.max_zone_occupancy, "labels": event.labels}),
-                thresholds_json=json.dumps({"min_zone_occupancy": 0.15, "min_duration": 2.0, "max_gap": 1.0}),
+                raw_scores_json=json.dumps({
+                    "zone_id": zone.id, "zone_name": zone.name, "zone_polygon": polygon,
+                    "max_zone_occupancy": event.max_zone_occupancy, "labels": event.labels,
+                    "contributing_detections": event.evidence,
+                }),
+                thresholds_json=json.dumps({
+                    "min_zone_occupancy": request.min_zone_occupancy,
+                    "min_duration": request.min_duration, "max_gap": request.max_gap,
+                    "event_merge_interval": request.event_merge_interval,
+                    "profile_name": request.profile_name,
+                }),
                 supporting_frames_json=json.dumps(event.supporting_frames),
             )
             db.add(candidate)
@@ -336,6 +410,93 @@ def get_event(event_id: str, db: Session = Depends(get_db)):
     if not event:
         raise HTTPException(404, "event not found")
     return event_dict(event)
+
+
+@app.get("/api/events/{event_id}/evidence")
+def get_event_evidence(event_id: str, db: Session = Depends(get_db)):
+    event = db.get(CandidateEvent, event_id)
+    if not event:
+        raise HTTPException(404, "event not found")
+    supporting_ids = set(json.loads(event.supporting_frames_json))
+    frames = db.scalars(select(VideoFrame).where(
+        VideoFrame.video_id == event.video_id,
+        VideoFrame.timestamp_seconds >= max(0, event.start_seconds - 0.5),
+        VideoFrame.timestamp_seconds <= event.end_seconds + 0.5,
+    ).order_by(VideoFrame.timestamp_seconds)).all()
+    for item in db.scalars(select(VideoFrame).where(VideoFrame.id.in_(supporting_ids))).all() if supporting_ids else []:
+        if item not in frames:
+            frames.append(item)
+    frames.sort(key=lambda item: item.timestamp_seconds)
+    return {
+        "event": event_dict(event),
+        "frames": [{
+            "id": item.id, "timestamp_seconds": item.timestamp_seconds,
+            "is_supporting": item.id in supporting_ids,
+            "image_url": f"/api/frames/{item.id}/image",
+            "overlay_url": f"/api/frames/{item.id}/overlay",
+            "evidence_url": f"/api/frames/{item.id}/evidence",
+        } for item in frames],
+    }
+
+
+@app.post("/api/validation/annotations", response_model=AnnotationOut, status_code=201)
+def create_annotation(request: AnnotationCreate, db: Session = Depends(get_db)):
+    video = db.get(Video, request.video_id)
+    if not video:
+        raise HTTPException(404, "video not found")
+    if video.duration_seconds is not None and request.end_seconds > video.duration_seconds + 1e-6:
+        raise HTTPException(422, "annotation exceeds video duration")
+    identifier = deterministic_annotation_id(request)
+    existing = db.get(ValidationAnnotation, identifier)
+    if existing:
+        return existing
+    annotation = ValidationAnnotation(id=identifier, **request.model_dump())
+    db.add(annotation)
+    db.commit()
+    return annotation
+
+
+@app.get("/api/validation/annotations", response_model=list[AnnotationOut])
+def list_annotations(video_id: str | None = None, db: Session = Depends(get_db)):
+    query = select(ValidationAnnotation)
+    if video_id:
+        query = query.where(ValidationAnnotation.video_id == video_id)
+    return db.scalars(query.order_by(ValidationAnnotation.video_id, ValidationAnnotation.start_seconds)).all()
+
+
+@app.delete("/api/validation/annotations/{annotation_id}", status_code=204)
+def delete_annotation(annotation_id: str, db: Session = Depends(get_db)):
+    annotation = db.get(ValidationAnnotation, annotation_id)
+    if not annotation:
+        raise HTTPException(404, "annotation not found")
+    db.delete(annotation)
+    db.commit()
+
+
+@app.post("/api/videos/{video_id}/evaluate")
+def evaluate_video(video_id: str, request: EvaluationRequest, db: Session = Depends(get_db)):
+    positives = db.scalars(select(ValidationAnnotation).where(
+        ValidationAnnotation.video_id == video_id,
+        ValidationAnnotation.event_type == request.event_type,
+        ValidationAnnotation.split == request.split,
+        ValidationAnnotation.ground_truth_label == "positive",
+    )).all()
+    annotations_total = db.scalar(select(func.count()).select_from(ValidationAnnotation).where(
+        ValidationAnnotation.video_id == video_id,
+        ValidationAnnotation.event_type == request.event_type,
+        ValidationAnnotation.split == request.split,
+    )) or 0
+    predictions = db.scalars(select(CandidateEvent).where(
+        CandidateEvent.video_id == video_id,
+        CandidateEvent.event_type == request.event_type,
+        CandidateEvent.synthetic_fixture.is_(False),
+    )).all()
+    result = evaluate_events(
+        [IntervalEvent(item.id, item.start_seconds, item.end_seconds, item.event_type) for item in predictions],
+        [IntervalEvent(item.id, item.start_seconds, item.end_seconds, item.event_type) for item in positives],
+        request.temporal_iou_threshold, request.onset_tolerance_seconds,
+    )
+    return {**result, "video_id": video_id, "event_type": request.event_type, "split": request.split, "annotations_total": annotations_total, "positive_annotations": len(positives), "prediction_count": len(predictions), "warning": "Metrics describe only this annotated local set and are not evidence of generalization."}
 
 
 @app.patch("/api/events/{event_id}/review")

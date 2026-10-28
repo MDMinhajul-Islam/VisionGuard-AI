@@ -2,7 +2,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-from app.database.models import CandidateEvent, Video
+from app.database.models import CandidateEvent, ObjectDetection, PoseEvidence, SafetyZone, ValidationAnnotation, Video, VideoFrame
 from app.database.session import SessionLocal
 from app.main import app
 
@@ -43,4 +43,65 @@ def test_human_review_update():
         assert response.status_code == 200
         assert response.json()["review_status"] == "confirmed_by_reviewer"
         assert "Human reviewed" in response.json()["reviewer_note"]
+
+
+def test_annotation_create_is_deterministic_and_evaluation_is_event_level():
+    db = SessionLocal()
+    video = Video(id="v-annotation", original_filename="authorized.mp4", stored_filename="authorized.mp4", path="authorized.mp4", size_bytes=1, duration_seconds=10, status="indexed")
+    prediction = CandidateEvent(id="p-annotation", video_id=video.id, event_type="potential_fall", label="Potential Fall — Review Required", start_seconds=2.2, end_seconds=3.4, processing_method="test", model_version="test", raw_scores_json="{}", thresholds_json="{}", supporting_frames_json="[]")
+    db.merge(video); db.merge(prediction); db.commit(); db.close()
+    payload = {"video_id": video.id, "event_type": "potential_fall", "start_seconds": 2, "end_seconds": 3.5, "ground_truth_label": "positive", "annotation_source": "authorized staged reviewer", "split": "evaluation"}
+    with TestClient(app) as client:
+        first = client.post("/api/validation/annotations", json=payload)
+        second = client.post("/api/validation/annotations", json=payload)
+        assert first.status_code == 201
+        assert first.json()["id"] == second.json()["id"]
+        result = client.post(f"/api/videos/{video.id}/evaluate", json={"event_type": "potential_fall"}).json()
+        assert result["true_positives"] == 1
+        assert result["precision"] == 1
+
+
+def test_reprocess_requires_explicit_override_when_reviewed_model_events_exist():
+    db = SessionLocal()
+    video = Video(id="v-reviewed", original_filename="reviewed.mp4", stored_filename="reviewed.mp4", path="reviewed.mp4", size_bytes=1, duration_seconds=5, status="indexed")
+    event = CandidateEvent(id="e-reviewed", video_id=video.id, event_type="potential_fall", label="Potential Fall — Review Required", start_seconds=1, end_seconds=2, processing_method="test", model_version="test", raw_scores_json="{}", thresholds_json="{}", supporting_frames_json="[]", review_status="false_positive", synthetic_fixture=False)
+    db.merge(video); db.merge(event); db.commit(); db.close()
+    with TestClient(app) as client:
+        response = client.post(f"/api/videos/{video.id}/process", json={})
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "reviewed_events_exist"
+
+
+def test_frame_evidence_keeps_pose_sync_error_and_actual_detections_separate():
+    db = SessionLocal()
+    video = Video(id="v-evidence", original_filename="evidence.mp4", stored_filename="evidence.mp4", path="evidence.mp4", size_bytes=1, duration_seconds=5, status="indexed")
+    frame = VideoFrame(id="f-evidence", video_id=video.id, timestamp_seconds=1.0, frame_number=25, path="unused.jpg", width=640, height=360)
+    detection = ObjectDetection(id="d-evidence", video_id=video.id, frame_id=frame.id, timestamp_seconds=1.0, label="person", confidence=.91, bbox_json="[0.1,0.1,0.5,0.9]", track_id=3)
+    pose = PoseEvidence(id="pose-evidence", video_id=video.id, frame_id=frame.id, timestamp_seconds=1.04, frame_timestamp_seconds=1.0, sync_error_seconds=.04, landmarks_json="[]", signals_json='{"state":"upright"}', sufficient_evidence=True)
+    db.merge(video); db.merge(frame); db.merge(detection); db.merge(pose); db.commit(); db.close()
+    with TestClient(app) as client:
+        payload = client.get(f"/api/frames/{frame.id}/evidence").json()
+        assert payload["detections"][0]["track_id"] == 3
+        assert payload["pose_samples"][0]["sync_error_seconds"] == .04
+        assert payload["pose_samples"][0]["signals"]["state"] == "upright"
+
+
+def test_zone_reanalysis_preserves_reviewed_event_without_duplicate():
+    db = SessionLocal()
+    video = Video(id="v-zone-reviewed", original_filename="zone.mp4", stored_filename="zone-reviewed.mp4", path="zone.mp4", size_bytes=1, duration_seconds=5, status="indexed")
+    zone = SafetyZone(id="z-reviewed", video_id=video.id, name="Exit", zone_type="emergency_exit", polygon_json="[[0.5,0.5],[0.9,0.5],[0.9,0.9],[0.5,0.9]]")
+    reviewed = CandidateEvent(id="e-zone-reviewed", video_id=video.id, event_type="potential_exit_obstruction", label="Potential Exit Obstruction — Review Required", start_seconds=0, end_seconds=2, processing_method="test", model_version="test", raw_scores_json='{"zone_id":"z-reviewed"}', thresholds_json="{}", supporting_frames_json="[]", review_status="false_positive")
+    db.merge(video); db.merge(zone); db.merge(reviewed)
+    for index in range(3):
+        frame = VideoFrame(id=f"zf-{index}", video_id=video.id, timestamp_seconds=float(index), frame_number=index, path="unused.jpg", width=640, height=360)
+        detection = ObjectDetection(id=f"zd-{index}", video_id=video.id, frame_id=frame.id, timestamp_seconds=float(index), label="chair", confidence=.9, bbox_json="[0.55,0.55,0.8,0.8]", track_id=1)
+        db.merge(frame); db.merge(detection)
+    db.commit(); db.close()
+    with TestClient(app) as client:
+        response = client.post(f"/api/videos/{video.id}/zones/analyze", json={})
+        assert response.status_code == 200
+        assert response.json()["events_created"] == 0
+    db = SessionLocal()
+    assert db.get(CandidateEvent, reviewed.id).review_status == "false_positive"
+    db.close()
 

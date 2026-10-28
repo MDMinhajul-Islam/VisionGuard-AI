@@ -1,0 +1,14 @@
+{
+  "profile_name": "conservative-example",
+  "pose_confidence_threshold": 0.65,
+  "fall_transition_window": 1.2,
+  "fall_min_vertical_drop": 0.16,
+  "fall_horizontal_persistence": 1.0,
+  "pose_max_gap": 0.4,
+  "pose_smoothing_window": 3,
+  "zone_overlap_threshold": 0.25,
+  "obstruction_persistence": 3.0,
+  "obstruction_max_gap": 0.6,
+  "event_merge_interval": 0.75,
+  "status": "example_only_not_calibrated"
+}

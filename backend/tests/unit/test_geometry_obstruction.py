@@ -8,7 +8,7 @@ ZONE = [(0.5, 0.5), (0.9, 0.5), (0.9, 0.9), (0.5, 0.9)]
 
 
 def sample(timestamp, bbox, label="chair"):
-    return ObstructionSample(timestamp, label, bbox, 0.9, f"f-{timestamp}")
+    return ObstructionSample(timestamp, label, bbox, 0.9, f"f-{timestamp}", 7)
 
 
 def test_polygon_and_overlap_cases():
@@ -36,4 +36,6 @@ def test_temporal_obstruction_cases(samples, expected):
     assert len(events) == expected
     if events:
         assert events[0].end_seconds - events[0].start_seconds >= 2
+        assert events[0].evidence[0]["track_id"] == 7
+        assert events[0].evidence[0]["zone_occupancy"] >= .15
 

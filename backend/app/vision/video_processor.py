@@ -11,13 +11,13 @@ from sqlalchemy import delete, select
 
 from app.core.config import get_settings
 from app.database.models import (
-    CandidateEvent, EmbeddingCache, ObjectDetection, ProcessingJob, SafetyZone,
-    Video, VideoFrame, now_iso,
+    CandidateEvent, EmbeddingCache, ObjectDetection, PoseEvidence, ProcessingJob,
+    SafetyZone, Video, VideoFrame, now_iso,
 )
 from app.database.session import SessionLocal
 from app.services.video_io import iter_sampled_frames, probe_video, save_jpeg
 from app.vision.clip_engine import clip_engine
-from app.vision.fall_detection import detect_fall_events
+from app.vision.fall_detection import detect_fall_events, pose_signals
 from app.vision.object_detector import object_detector
 from app.vision.obstruction_detection import ObstructionSample, detect_persistent_obstructions
 from app.vision.pose_engine import pose_engine
@@ -25,6 +25,21 @@ from app.vision.tracker import IoUTracker
 
 
 RELEVANT_LABELS = {"person", "backpack", "handbag", "suitcase", "chair", "bicycle", "car", "truck"}
+
+
+def cleanup_partial_analysis(db, video: Video, frame_dir: Path) -> None:
+    db.execute(delete(ObjectDetection).where(ObjectDetection.video_id == video.id))
+    db.execute(delete(PoseEvidence).where(PoseEvidence.video_id == video.id))
+    db.execute(delete(VideoFrame).where(VideoFrame.video_id == video.id))
+    db.execute(delete(EmbeddingCache).where(EmbeddingCache.video_id == video.id))
+    db.execute(delete(CandidateEvent).where(
+        CandidateEvent.video_id == video.id,
+        CandidateEvent.synthetic_fixture.is_(False),
+        CandidateEvent.review_status == "pending",
+    ))
+    db.commit()
+    if frame_dir.exists():
+        shutil.rmtree(frame_dir)
 
 
 def update_job(db, job, progress, stage, **fields):
@@ -68,6 +83,7 @@ def process_video_job(job_id: str) -> None:
         db.commit()
 
         db.execute(delete(ObjectDetection).where(ObjectDetection.video_id == video.id))
+        db.execute(delete(PoseEvidence).where(PoseEvidence.video_id == video.id))
         db.execute(delete(VideoFrame).where(VideoFrame.video_id == video.id))
         db.execute(delete(EmbeddingCache).where(EmbeddingCache.video_id == video.id))
         db.execute(delete(CandidateEvent).where(CandidateEvent.video_id == video.id, CandidateEvent.synthetic_fixture.is_(False)))
@@ -75,6 +91,8 @@ def process_video_job(job_id: str) -> None:
         if frame_dir.exists():
             shutil.rmtree(frame_dir)
         frame_dir.mkdir(parents=True)
+        video.thumbnail_path = None
+        db.commit()
 
         sample_fps = max(config["analysis_fps"], 1.0 / config["clip_sample_seconds"])
         update_job(db, job, 5, "extracting frames")
@@ -175,21 +193,52 @@ def process_video_job(job_id: str) -> None:
                     pose_times.append(pose_engine.last_inference_ms)
                 if index % 10 == 0 and metadata["duration_seconds"]:
                     update_job(db, job, 72 + 13 * sampled.timestamp_seconds / metadata["duration_seconds"], "pose estimation and temporal fall analysis")
-            fall_events = detect_fall_events(observations)
+                signals = pose_signals(observation, config["pose_confidence_threshold"])
+                db.add(PoseEvidence(
+                    video_id=video.id, frame_id=nearest.id,
+                    timestamp_seconds=observation.timestamp,
+                    frame_timestamp_seconds=nearest.timestamp_seconds,
+                    sync_error_seconds=abs(observation.timestamp - nearest.timestamp_seconds),
+                    landmarks_json=json.dumps(observation.landmarks),
+                    signals_json=json.dumps(signals),
+                    sufficient_evidence=signals["state"] != "unknown",
+                ))
+            db.commit()
+            fall_thresholds = {
+                "transition_window": config["fall_transition_window"],
+                "min_vertical_drop": config["fall_min_vertical_drop"],
+                "horizontal_persistence": config["fall_horizontal_persistence"],
+                "confidence_threshold": config["pose_confidence_threshold"],
+                "max_pose_gap": config["pose_max_gap"],
+                "smoothing_window": config["pose_smoothing_window"],
+                "event_merge_interval": config["event_merge_interval"],
+                "profile_name": config["profile_name"],
+            }
+            fall_events = detect_fall_events(
+                observations,
+                transition_window=config["fall_transition_window"],
+                min_vertical_drop=config["fall_min_vertical_drop"],
+                horizontal_persistence=config["fall_horizontal_persistence"],
+                confidence_threshold=config["pose_confidence_threshold"],
+                max_pose_gap=config["pose_max_gap"],
+                smoothing_window=config["pose_smoothing_window"],
+                event_merge_interval=config["event_merge_interval"],
+            )
             for event in fall_events:
                 db.add(CandidateEvent(
                     video_id=video.id, event_type="potential_fall",
                     label="Potential Fall — Review Required", start_seconds=event.start_seconds,
                     end_seconds=event.end_seconds, processing_method="mediapipe_pose_temporal_heuristic",
-                    model_version=pose_engine.model_name, raw_scores_json=json.dumps({"heuristic_signal": event.confidence_signal}),
-                    thresholds_json=json.dumps({"transition_window": 1.5, "min_vertical_drop": 0.12, "horizontal_persistence": 0.6}),
+                    model_version=pose_engine.model_name,
+                    raw_scores_json=json.dumps({"heuristic_signal": event.confidence_signal, **event.evidence}),
+                    thresholds_json=json.dumps(fall_thresholds),
                     supporting_frames_json=json.dumps(event.supporting_frames), review_status="pending",
                 ))
             db.commit()
             metrics.update({
                 "pose_frames": len(observations), "potential_fall_events": len(fall_events),
                 "average_pose_inference_ms": sum(pose_times) / len(pose_times) if pose_times else None,
-                "pose_frames_with_sufficient_evidence": sum(item.visibility >= 0.5 for item in observations),
+                "pose_frames_with_sufficient_evidence": sum(pose_signals(item, config["pose_confidence_threshold"])["state"] != "unknown" for item in observations),
             })
             pose_engine.close()
 
@@ -199,16 +248,33 @@ def process_video_job(job_id: str) -> None:
         obstruction_count = 0
         for zone in zones:
             polygon = json.loads(zone.polygon_json)
-            samples = [ObstructionSample(item.timestamp_seconds, item.label, tuple(json.loads(item.bbox_json)), item.confidence, item.frame_id) for item in detections]
-            events = detect_persistent_obstructions(samples, polygon)
+            samples = [ObstructionSample(item.timestamp_seconds, item.label, tuple(json.loads(item.bbox_json)), item.confidence, item.frame_id, item.track_id) for item in detections]
+            obstruction_thresholds = {
+                "min_zone_occupancy": config["zone_overlap_threshold"],
+                "min_duration": config["obstruction_persistence"],
+                "max_gap": config["obstruction_max_gap"],
+                "event_merge_interval": config["event_merge_interval"],
+                "profile_name": config["profile_name"],
+            }
+            events = detect_persistent_obstructions(
+                samples, polygon,
+                min_zone_occupancy=config["zone_overlap_threshold"],
+                min_duration=config["obstruction_persistence"],
+                max_gap=config["obstruction_max_gap"],
+                event_merge_interval=config["event_merge_interval"],
+            )
             for event in events:
                 db.add(CandidateEvent(
                     video_id=video.id, event_type="potential_exit_obstruction" if zone.zone_type == "emergency_exit" else "potential_walkway_obstruction",
                     label="Potential Exit Obstruction — Review Required" if zone.zone_type == "emergency_exit" else "Potential Walkway Obstruction — Review Required",
                     start_seconds=event.start_seconds, end_seconds=event.end_seconds,
                     processing_method="manual_zone_bbox_persistence", model_version=object_detector.model_name,
-                    raw_scores_json=json.dumps({"max_zone_occupancy": event.max_zone_occupancy, "labels": event.labels}),
-                    thresholds_json=json.dumps({"min_zone_occupancy": 0.15, "min_duration": 2.0, "max_gap": 1.0}),
+                    raw_scores_json=json.dumps({
+                        "zone_id": zone.id, "zone_name": zone.name, "zone_polygon": polygon,
+                        "max_zone_occupancy": event.max_zone_occupancy, "labels": event.labels,
+                        "contributing_detections": event.evidence,
+                    }),
+                    thresholds_json=json.dumps(obstruction_thresholds),
                     supporting_frames_json=json.dumps(event.supporting_frames), review_status="pending",
                 ))
                 obstruction_count += 1
@@ -220,9 +286,11 @@ def process_video_job(job_id: str) -> None:
         job.metrics_json = json.dumps(metrics)
         job.status = "completed"
         job.completed_at = now_iso()
-        video.status = "indexed"
+        has_index = db.scalar(select(EmbeddingCache.id).where(EmbeddingCache.video_id == video.id)) is not None
+        video.status = "indexed" if has_index else "processed"
         update_job(db, job, 100, "completed")
     except InterruptedError:
+        cleanup_partial_analysis(db, video, frame_dir)
         video.status = "uploaded"
         db.commit()
     except Exception as error:
@@ -232,4 +300,7 @@ def process_video_job(job_id: str) -> None:
         video.status = "failed"
         update_job(db, job, job.progress, "failed")
     finally:
+        clip_engine.unload()
+        object_detector.unload()
+        pose_engine.close()
         db.close()

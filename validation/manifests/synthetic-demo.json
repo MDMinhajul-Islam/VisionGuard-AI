@@ -1,0 +1,41 @@
+{
+  "dataset_name": "VisionGuard generated semantic demo",
+  "provenance": "Generated locally by scripts/generate_demo.py; vector drawings and text, no real people.",
+  "license_or_consent": "Project-authored synthetic fixture; not real safety evidence.",
+  "exhaustive_annotations": true,
+  "annotations": [
+    {
+      "video_id": "REPLACE_WITH_LOCAL_VIDEO_ID",
+      "event_type": "semantic_search",
+      "start_seconds": 0.0,
+      "end_seconds": 2.0,
+      "ground_truth_label": "positive",
+      "annotation_source": "synthetic_generator_known_interval",
+      "reviewer_note": "People participating in a workshop scene.",
+      "query_text": "People participating in a workshop.",
+      "split": "development"
+    },
+    {
+      "video_id": "REPLACE_WITH_LOCAL_VIDEO_ID",
+      "event_type": "semantic_search",
+      "start_seconds": 2.0,
+      "end_seconds": 4.0,
+      "ground_truth_label": "positive",
+      "annotation_source": "synthetic_generator_known_interval",
+      "reviewer_note": "Person carrying a cardboard box scene.",
+      "query_text": "Someone carrying a cardboard box.",
+      "split": "development"
+    },
+    {
+      "video_id": "REPLACE_WITH_LOCAL_VIDEO_ID",
+      "event_type": "potential_fall",
+      "start_seconds": 0.0,
+      "end_seconds": 8.0,
+      "ground_truth_label": "no_event",
+      "annotation_source": "synthetic_generator_known_content",
+      "reviewer_note": "No real person or staged fall exists in this generated drawing.",
+      "query_text": null,
+      "split": "development"
+    }
+  ]
+}

@@ -34,6 +34,18 @@ class ProcessRequest(BaseModel):
     pose_fps: float = Field(default=5.0, ge=1, le=15)
     process_width: int = Field(default=640, ge=224, le=1280)
     detection_threshold: float = Field(default=0.45, ge=0.05, le=0.99)
+    pose_confidence_threshold: float = Field(default=0.5, ge=0.1, le=0.99)
+    fall_transition_window: float = Field(default=1.5, ge=0.2, le=5)
+    fall_min_vertical_drop: float = Field(default=0.12, ge=0.01, le=0.8)
+    fall_horizontal_persistence: float = Field(default=0.6, ge=0.2, le=10)
+    pose_max_gap: float = Field(default=0.6, ge=0.1, le=3)
+    pose_smoothing_window: int = Field(default=3, ge=1, le=9)
+    zone_overlap_threshold: float = Field(default=0.15, ge=0.01, le=1)
+    obstruction_persistence: float = Field(default=2.0, ge=0.2, le=60)
+    obstruction_max_gap: float = Field(default=1.0, ge=0, le=10)
+    event_merge_interval: float = Field(default=1.0, ge=0, le=30)
+    profile_name: str = Field(default="baseline", min_length=1, max_length=60)
+    allow_reprocess_reviewed: bool = False
     enable_clip: bool = True
     enable_detection: bool = True
     enable_pose: bool = True
@@ -94,6 +106,14 @@ class ZoneCreate(BaseModel):
         return self
 
 
+class ZoneAnalysisRequest(BaseModel):
+    min_zone_occupancy: float = Field(default=0.15, ge=0.01, le=1)
+    min_duration: float = Field(default=2.0, ge=0.2, le=60)
+    max_gap: float = Field(default=1.0, ge=0, le=10)
+    event_merge_interval: float = Field(default=1.0, ge=0, le=30)
+    profile_name: str = Field(default="baseline", min_length=1, max_length=60)
+
+
 class ReviewUpdate(BaseModel):
     status: ReviewStatus
     reviewer_note: str = Field(default="", max_length=4000)
@@ -110,4 +130,40 @@ class ExportRequest(BaseModel):
         if self.end_seconds - self.start_seconds > 300:
             raise ValueError("clips are limited to five minutes")
         return self
+
+
+GroundTruthLabel = Literal["positive", "negative", "uncertain", "no_event"]
+ValidationSplit = Literal["development", "calibration", "evaluation"]
+
+
+class AnnotationCreate(BaseModel):
+    video_id: str = Field(min_length=1, max_length=64)
+    event_type: Literal["potential_fall", "potential_exit_obstruction", "potential_walkway_obstruction", "semantic_search"]
+    start_seconds: float = Field(ge=0)
+    end_seconds: float = Field(gt=0)
+    ground_truth_label: GroundTruthLabel
+    annotation_source: str = Field(min_length=3, max_length=200)
+    reviewer_note: str = Field(default="", max_length=4000)
+    query_text: str | None = Field(default=None, max_length=500)
+    split: ValidationSplit = "evaluation"
+
+    @model_validator(mode="after")
+    def validate_interval_and_query(self):
+        if self.end_seconds <= self.start_seconds:
+            raise ValueError("end_seconds must be greater than start_seconds")
+        if self.event_type == "semantic_search" and not self.query_text:
+            raise ValueError("semantic_search annotations require query_text")
+        return self
+
+
+class AnnotationOut(AnnotationCreate):
+    id: str
+    created_at: str
+
+
+class EvaluationRequest(BaseModel):
+    event_type: Literal["potential_fall", "potential_exit_obstruction", "potential_walkway_obstruction"]
+    split: ValidationSplit = "evaluation"
+    temporal_iou_threshold: float = Field(default=0.3, ge=0, le=1)
+    onset_tolerance_seconds: float = Field(default=1.0, ge=0, le=30)
 

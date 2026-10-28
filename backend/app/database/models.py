@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.session import Base
@@ -80,6 +80,21 @@ class ObjectDetection(Base):
     track_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
 
+class PoseEvidence(Base):
+    __tablename__ = "pose_evidence"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    video_id: Mapped[str] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), index=True)
+    frame_id: Mapped[str] = mapped_column(ForeignKey("video_frames.id", ondelete="CASCADE"), index=True)
+    timestamp_seconds: Mapped[float] = mapped_column(Float, index=True)
+    frame_timestamp_seconds: Mapped[float] = mapped_column(Float)
+    sync_error_seconds: Mapped[float] = mapped_column(Float)
+    landmarks_json: Mapped[str] = mapped_column(Text, default="[]")
+    signals_json: Mapped[str] = mapped_column(Text, default="{}")
+    sufficient_evidence: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
+    __table_args__ = (Index("ix_pose_video_time", "video_id", "timestamp_seconds"),)
+
+
 class SafetyZone(Base):
     __tablename__ = "safety_zones"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
@@ -130,4 +145,26 @@ class ExportedClip(Base):
     end_seconds: Mapped[float] = mapped_column(Float)
     duration_seconds: Mapped[float] = mapped_column(Float)
     created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+
+
+class ValidationAnnotation(Base):
+    """Ground truth is intentionally separate from model-created CandidateEvent rows."""
+
+    __tablename__ = "validation_annotations"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    video_id: Mapped[str] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), index=True)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    start_seconds: Mapped[float] = mapped_column(Float)
+    end_seconds: Mapped[float] = mapped_column(Float)
+    ground_truth_label: Mapped[str] = mapped_column(String(24), index=True)
+    annotation_source: Mapped[str] = mapped_column(String(200))
+    reviewer_note: Mapped[str] = mapped_column(Text, default="")
+    query_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    split: Mapped[str] = mapped_column(String(24), default="evaluation", index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+
+    __table_args__ = (
+        UniqueConstraint("video_id", "event_type", "start_seconds", "end_seconds", "ground_truth_label", "annotation_source", "query_text", name="uq_validation_annotation"),
+        Index("ix_annotation_video_type_time", "video_id", "event_type", "start_seconds"),
+    )
 

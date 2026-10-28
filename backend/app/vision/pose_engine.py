@@ -47,7 +47,7 @@ class PoseEngine:
             result = self.landmarker.detect_for_video(image, timestamp_ms)
         self.last_inference_ms = (time.perf_counter() - started) * 1000
         if not result.pose_landmarks:
-            return PoseObservation(timestamp_ms / 1000, None, None, None, 0.0, frame_id)
+            return PoseObservation(timestamp_ms / 1000, None, None, None, 0.0, frame_id, [], list(range(33)))
         points = result.pose_landmarks[0]
         ids = [11, 12, 23, 24, 27, 28]
         visibility = sum(float(points[index].visibility or 0) for index in ids) / len(ids)
@@ -57,7 +57,12 @@ class PoseEngine:
         bbox = None
         if visible_points:
             bbox = (min(p.x for p in visible_points), min(p.y for p in visible_points), max(p.x for p in visible_points), max(p.y for p in visible_points))
-        return PoseObservation(timestamp_ms / 1000, shoulder, hip, bbox, visibility, frame_id)
+        landmarks = [{
+            "index": index, "x": float(point.x), "y": float(point.y), "z": float(point.z),
+            "visibility": float(point.visibility or 0), "presence": float(point.presence or 0),
+        } for index, point in enumerate(points)]
+        missing = [item["index"] for item in landmarks if item["visibility"] < 0.4 or item["presence"] < 0.4]
+        return PoseObservation(timestamp_ms / 1000, shoulder, hip, bbox, visibility, frame_id, landmarks, missing)
 
     def close(self):
         if self.landmarker is not None:

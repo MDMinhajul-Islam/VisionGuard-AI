@@ -81,12 +81,19 @@ def iter_sampled_frames(path: Path, sample_fps: float, process_width: int):
     interval = 1.0 / sample_fps
     next_timestamp = 0.0
     frame_number = 0
+    last_timestamp = -1.0
     try:
         while True:
             ok, frame = capture.read()
             if not ok:
                 break
-            timestamp = frame_number / source_fps
+            fallback_timestamp = frame_number / source_fps
+            reported_timestamp = capture.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+            timestamp = reported_timestamp if reported_timestamp >= 0 and reported_timestamp > last_timestamp else fallback_timestamp
+            # VFR-aware when OpenCV exposes presentation timestamps; monotonic CFR fallback otherwise.
+            if timestamp <= last_timestamp:
+                timestamp = fallback_timestamp
+            last_timestamp = timestamp
             frame_number += 1
             if timestamp + 1e-6 < next_timestamp:
                 continue
@@ -106,10 +113,16 @@ def save_jpeg(frame, path: Path, quality: int = 88) -> None:
         raise OSError(f"failed to write frame: {path}")
 
 
-def render_overlay(frame, detections: list[dict], polygon=None):
+POSE_CONNECTIONS = [
+    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
+    (11, 23), (12, 24), (23, 24), (23, 25), (25, 27), (24, 26), (26, 28),
+]
+
+
+def render_overlay(frame, detections: list[dict], polygons=None, pose_landmarks=None):
     output = frame.copy()
     height, width = output.shape[:2]
-    if polygon:
+    for polygon in polygons or []:
         points = [(round(x * width), round(y * height)) for x, y in polygon]
         cv2.polylines(output, [__import__("numpy").array(points)], True, (0, 191, 255), 3)
     for detection in detections:
@@ -117,5 +130,12 @@ def render_overlay(frame, detections: list[dict], polygon=None):
         color = (34, 197, 94) if detection["label"] == "person" else (255, 153, 51)
         cv2.rectangle(output, (round(x1), round(y1)), (round(x2), round(y2)), color, 2)
         cv2.putText(output, f"{detection['label']} {detection['confidence']:.2f} T{detection.get('track_id', '-')}", (round(x1), max(18, round(y1) - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    by_index = {item["index"]: item for item in pose_landmarks or [] if item.get("visibility", 0) >= 0.4}
+    for left, right in POSE_CONNECTIONS:
+        if left in by_index and right in by_index:
+            p1, p2 = by_index[left], by_index[right]
+            cv2.line(output, (round(p1["x"] * width), round(p1["y"] * height)), (round(p2["x"] * width), round(p2["y"] * height)), (230, 92, 230), 2)
+    for point in by_index.values():
+        cv2.circle(output, (round(point["x"] * width), round(point["y"] * height)), 3, (255, 255, 255), -1)
     return output
 

@@ -12,6 +12,7 @@ class ObstructionSample:
     bbox: tuple[float, float, float, float]
     confidence: float
     frame_id: str = ""
+    track_id: int | None = None
 
 
 @dataclass
@@ -21,6 +22,8 @@ class ObstructionEvent:
     labels: list[str]
     max_zone_occupancy: float
     supporting_frames: list[str] = field(default_factory=list)
+    evidence: list[dict] = field(default_factory=list)
+    state: str = "Potential Exit Obstruction — Review Required"
 
 
 def detect_persistent_obstructions(
@@ -29,6 +32,7 @@ def detect_persistent_obstructions(
     min_zone_occupancy: float = 0.15,
     min_duration: float = 2.0,
     max_gap: float = 1.0,
+    event_merge_interval: float = 1.0,
 ) -> list[ObstructionEvent]:
     qualifying = []
     for sample in sorted(samples, key=lambda item: item.timestamp):
@@ -50,12 +54,25 @@ def detect_persistent_obstructions(
         start, end = group[0][0].timestamp, group[-1][0].timestamp
         if end - start < min_duration:
             continue
-        events.append(ObstructionEvent(
-            start_seconds=start,
-            end_seconds=end,
+        evidence = [{
+            "timestamp_seconds": sample.timestamp, "frame_id": sample.frame_id,
+            "label": sample.label, "confidence": sample.confidence,
+            "bbox": list(sample.bbox), "track_id": sample.track_id,
+            "zone_occupancy": overlap,
+        } for sample, overlap in group]
+        candidate = ObstructionEvent(
+            start_seconds=start, end_seconds=end,
             labels=sorted({sample.label for sample, _ in group}),
             max_zone_occupancy=max(overlap for _, overlap in group),
             supporting_frames=list(dict.fromkeys(sample.frame_id for sample, _ in group if sample.frame_id)),
-        ))
+            evidence=evidence,
+        )
+        if events and candidate.start_seconds - events[-1].end_seconds <= event_merge_interval:
+            events[-1].end_seconds = candidate.end_seconds
+            events[-1].labels = sorted(set(events[-1].labels + candidate.labels))
+            events[-1].max_zone_occupancy = max(events[-1].max_zone_occupancy, candidate.max_zone_occupancy)
+            events[-1].supporting_frames = list(dict.fromkeys(events[-1].supporting_frames + candidate.supporting_frames))
+            events[-1].evidence.extend(candidate.evidence)
+        else:
+            events.append(candidate)
     return events
-
