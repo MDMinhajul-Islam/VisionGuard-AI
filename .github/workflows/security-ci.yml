@@ -27,7 +27,7 @@ jobs:
       - name: Authorization, migration, and backend tests
         env:
           VISIONGUARD_AUTH_SECRET: ci-only-secret-with-at-least-thirty-two-characters
-        run: pytest backend/tests -m "not integration" --strict-markers
+        run: python -m pytest backend/tests -m "not integration" --strict-markers
       - name: Credential pattern scan
         run: python scripts/check_secrets.py
 
