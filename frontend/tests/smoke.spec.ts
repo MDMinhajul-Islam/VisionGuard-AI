@@ -1,5 +1,16 @@
 import {expect, test} from "@playwright/test";
 
+test.beforeEach(async ({page}) => {
+  const email=process.env.VISIONGUARD_E2E_EMAIL;
+  const password=process.env.VISIONGUARD_E2E_PASSWORD;
+  test.skip(!email||!password,"Set VISIONGUARD_E2E_EMAIL and VISIONGUARD_E2E_PASSWORD for authenticated browser tests.");
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email!);
+  await page.getByLabel("Password").fill(password!);
+  await page.getByRole("button",{name:"Sign in"}).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("real dashboard routes render and backend data is visible", async ({page}) => {
   await page.goto("/");
   await expect(page.getByRole("heading", {name: "Operations overview"})).toBeVisible();

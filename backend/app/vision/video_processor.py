@@ -86,7 +86,11 @@ def process_video_job(job_id: str) -> None:
         db.execute(delete(PoseEvidence).where(PoseEvidence.video_id == video.id))
         db.execute(delete(VideoFrame).where(VideoFrame.video_id == video.id))
         db.execute(delete(EmbeddingCache).where(EmbeddingCache.video_id == video.id))
-        db.execute(delete(CandidateEvent).where(CandidateEvent.video_id == video.id, CandidateEvent.synthetic_fixture.is_(False)))
+        db.execute(delete(CandidateEvent).where(
+            CandidateEvent.video_id == video.id,
+            CandidateEvent.synthetic_fixture.is_(False),
+            CandidateEvent.review_status == "pending",
+        ))
         db.commit()
         if frame_dir.exists():
             shutil.rmtree(frame_dir)

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import httpx
 
+from api_auth import authenticated_client
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
@@ -43,7 +45,7 @@ def main() -> int:
         for item in json.loads(annotations_path.read_text(encoding="utf-8")).get("annotations", []):
             annotation_map.setdefault(item["record_id"], []).append(item)
     report = []
-    with httpx.Client(base_url=args.api, timeout=120) as client:
+    with authenticated_client(args.api, 120) as client:
         existing = client.get("/api/datasets/assets").json()
         existing_by_key = {(item["dataset_name"], item["original_recording_id"]): item for item in existing}
         records = manifest.records[:args.limit] if args.limit else manifest.records

@@ -12,7 +12,7 @@ import cv2
 import mediapipe
 import torch
 import torchvision
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import delete, func, select
@@ -20,15 +20,19 @@ from sqlalchemy.orm import Session
 
 from app import __version__
 from app.core.config import get_settings
+from app.core.security import (
+    SESSION_COOKIE, authenticate_token, create_access_token, hash_password, normalize_email,
+    require_roles, verify_password,
+)
 from app.database import get_db, init_db
 from app.database.models import (
     CandidateEvent, DatasetAsset, EmbeddingCache, ExportedClip, ObjectDetection, PoseEvidence,
-    ProcessingJob, SafetyZone, ValidationAnnotation, Video, VideoFrame,
+    ProcessingJob, SafetyZone, User, ValidationAnnotation, Video, VideoFrame,
 )
 from app.schemas.api import (
     AnnotationCreate, AnnotationOut, DatasetAssetCreate, DatasetAssetOut, EvaluationRequest, ExportRequest, JobOut,
     ProcessRequest, ReviewUpdate, SearchRequest, SearchResponse, SearchResult,
-    VideoOut, ZoneAnalysisRequest, ZoneCreate,
+    LoginRequest, UserCreate, UserOut, VideoOut, ZoneAnalysisRequest, ZoneCreate,
 )
 from app.evaluation.annotations import deterministic_annotation_id
 from app.evaluation.metrics import IntervalEvent, evaluate_events, temporal_iou
@@ -46,6 +50,7 @@ from app.vision.obstruction_detection import ObstructionSample, detect_persisten
 from app.vision.pose_engine import pose_engine
 from app.vision.video_processor import process_video_job
 from app.workers.job_queue import job_queue
+from app.workers.recovery import recover_processing_jobs
 
 
 settings = get_settings()
@@ -56,6 +61,8 @@ logger = logging.getLogger("visionguard.api")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    recovery = recover_processing_jobs()
+    logger.info("job recovery: %s", recovery)
     yield
 
 
@@ -68,10 +75,28 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.frontend_origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+
+PUBLIC_PATHS = {"/api/health", "/api/auth/login", "/docs", "/openapi.json", "/redoc"}
+
+
+@app.middleware("http")
+async def authentication_gate(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS or not request.url.path.startswith("/api/"):
+        return await call_next(request)
+    authorization = request.headers.get("authorization", "")
+    token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else request.cookies.get(SESSION_COOKIE)
+    if not token:
+        return JSONResponse(status_code=401, content={"detail": {"code": "authentication_required", "message": "Authentication is required."}})
+    try:
+        request.state.user = authenticate_token(token)
+    except HTTPException as error:
+        return JSONResponse(status_code=error.status_code, content={"detail": {"code": "invalid_session", "message": str(error.detail)}})
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -139,6 +164,44 @@ def health():
     return {"status": "ok", "mode": "local-research", "version": __version__, "tools": tools}
 
 
+@app.post("/api/auth/login", response_model=UserOut)
+def login(request: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.email == normalize_email(request.email)))
+    if not user or user.disabled or not verify_password(request.password, user.password_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
+    token = create_access_token(user)
+    response.set_cookie(
+        SESSION_COOKIE, token, httponly=True, secure=settings.auth_cookie_secure,
+        samesite="strict", max_age=settings.auth_token_minutes * 60, path="/",
+    )
+    return user
+
+
+@app.post("/api/auth/logout", status_code=204)
+def logout(response: Response):
+    response.delete_cookie(SESSION_COOKIE, path="/", samesite="strict")
+
+
+@app.get("/api/auth/me", response_model=UserOut)
+def auth_me(user: User = Depends(require_roles("admin", "reviewer"))):
+    return user
+
+
+@app.post("/api/admin/users", response_model=UserOut, status_code=201)
+def create_user(request: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+    email = normalize_email(request.email)
+    if db.scalar(select(User).where(User.email == email)):
+        raise HTTPException(409, "email is already registered")
+    user = User(
+        email=email, display_name=request.display_name.strip(),
+        password_hash=hash_password(request.password), role=request.role,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @app.get("/api/overview")
 def overview(db: Session = Depends(get_db)):
     count = lambda model, *criteria: db.scalar(select(func.count()).select_from(model).where(*criteria)) or 0
@@ -152,7 +215,7 @@ def overview(db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/upload", response_model=VideoOut, status_code=status.HTTP_201_CREATED)
-async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     original = Path(file.filename or "upload.mp4").name
     extension = Path(original).suffix.lower()
     if extension not in SUPPORTED_EXTENSIONS:
@@ -217,7 +280,7 @@ def video_thumbnail(video_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/{video_id}/process", response_model=JobOut, status_code=202)
-def process_video(video_id: str, request: ProcessRequest, db: Session = Depends(get_db)):
+def process_video(video_id: str, request: ProcessRequest, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     video = db.get(Video, video_id)
     if not video:
         raise HTTPException(404, "video not found")
@@ -250,7 +313,7 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/jobs/{job_id}/cancel", response_model=JobOut)
-def cancel_job(job_id: str, db: Session = Depends(get_db)):
+def cancel_job(job_id: str, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     job = db.get(ProcessingJob, job_id)
     if not job:
         raise HTTPException(404, "job not found")
@@ -347,7 +410,7 @@ def detections(video_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/{video_id}/zones", status_code=201)
-def create_zone(video_id: str, request: ZoneCreate, db: Session = Depends(get_db)):
+def create_zone(video_id: str, request: ZoneCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     if not db.get(Video, video_id):
         raise HTTPException(404, "video not found")
     zone = SafetyZone(video_id=video_id, name=request.name, zone_type=request.zone_type, polygon_json=json.dumps(request.polygon))
@@ -363,7 +426,7 @@ def zones(video_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/{video_id}/zones/analyze")
-def analyze_zones(video_id: str, request: ZoneAnalysisRequest = ZoneAnalysisRequest(), db: Session = Depends(get_db)):
+def analyze_zones(video_id: str, request: ZoneAnalysisRequest = ZoneAnalysisRequest(), db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     zone_rows = db.scalars(select(SafetyZone).where(SafetyZone.video_id == video_id)).all()
     detection_rows = db.scalars(select(ObjectDetection).where(ObjectDetection.video_id == video_id)).all()
     reviewed_events = db.scalars(select(CandidateEvent).where(
@@ -469,7 +532,7 @@ def get_event_evidence(event_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/validation/annotations", response_model=AnnotationOut, status_code=201)
-def create_annotation(request: AnnotationCreate, db: Session = Depends(get_db)):
+def create_annotation(request: AnnotationCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     video = db.get(Video, request.video_id)
     if not video:
         raise HTTPException(404, "video not found")
@@ -494,7 +557,7 @@ def list_annotations(video_id: str | None = None, db: Session = Depends(get_db))
 
 
 @app.delete("/api/validation/annotations/{annotation_id}", status_code=204)
-def delete_annotation(annotation_id: str, db: Session = Depends(get_db)):
+def delete_annotation(annotation_id: str, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     annotation = db.get(ValidationAnnotation, annotation_id)
     if not annotation:
         raise HTTPException(404, "annotation not found")
@@ -503,7 +566,7 @@ def delete_annotation(annotation_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/{video_id}/evaluate")
-def evaluate_video(video_id: str, request: EvaluationRequest, db: Session = Depends(get_db)):
+def evaluate_video(video_id: str, request: EvaluationRequest, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     positives = db.scalars(select(ValidationAnnotation).where(
         ValidationAnnotation.video_id == video_id,
         ValidationAnnotation.event_type == request.event_type,
@@ -529,7 +592,7 @@ def evaluate_video(video_id: str, request: EvaluationRequest, db: Session = Depe
 
 
 @app.post("/api/datasets/assets", response_model=DatasetAssetOut, status_code=201)
-def register_dataset_asset(request: DatasetAssetCreate, db: Session = Depends(get_db)):
+def register_dataset_asset(request: DatasetAssetCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
     if not db.get(Video, request.video_id):
         raise HTTPException(404, "video not found")
     deterministic_id = "ds-" + hashlib.sha256(
@@ -693,7 +756,7 @@ def dataset_evaluation(
 
 
 @app.patch("/api/events/{event_id}/review")
-def review_event(event_id: str, request: ReviewUpdate, db: Session = Depends(get_db)):
+def review_event(event_id: str, request: ReviewUpdate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
     event = db.get(CandidateEvent, event_id)
     if not event:
         raise HTTPException(404, "event not found")
@@ -704,7 +767,7 @@ def review_event(event_id: str, request: ReviewUpdate, db: Session = Depends(get
 
 
 @app.post("/api/events/{event_id}/export", status_code=201)
-def export_event(event_id: str, request: ExportRequest, db: Session = Depends(get_db)):
+def export_event(event_id: str, request: ExportRequest, db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
     event = db.get(CandidateEvent, event_id)
     if not event:
         raise HTTPException(404, "event not found")
@@ -737,7 +800,7 @@ def system_info():
         "gpu_memory_total_mib": torch.cuda.get_device_properties(0).total_memory / 2**20 if torch.cuda.is_available() else None,
         "models": [
             {"name": clip_engine.model_name, "loaded": clip_engine.model is not None, "device": str(clip_engine.device), "purpose": "semantic retrieval"},
-            {"name": object_detector.model_name, "loaded": object_detector.model is not None, "device": str(object_detector.device), "purpose": "COCO object detection"},
+            {**object_detector.metadata.to_dict(), "name": object_detector.model_name, "loaded": object_detector.model is not None, "purpose": "COCO object detection"},
             {"name": pose_engine.model_name, "loaded": pose_engine.landmarker is not None, "device": "MediaPipe runtime", "purpose": "pose landmarks"},
         ],
         "limitations": [

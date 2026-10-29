@@ -6,6 +6,8 @@ from pathlib import Path
 
 import httpx
 
+from api_auth import authenticated_client
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -25,7 +27,7 @@ def main() -> int:
         value < 0 or value > 1 for value in (x, y, x + width, y + height)
     ):
         parser.error("zone must fit normalized [0,1] coordinates")
-    with httpx.Client(base_url=args.api, timeout=300) as client:
+    with authenticated_client(args.api, 300) as client:
         with args.video.open("rb") as handle:
             response = client.post(
                 "/api/videos/upload", files={"file": (args.video.name, handle, "video/mp4")}

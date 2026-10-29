@@ -1,0 +1,4 @@
+# Experimental benchmark environment only. Do not install into the commercial runtime.
+ultralytics==8.4.15
+rfdetr==1.11.2
+pydantic-settings>=2.7,<3

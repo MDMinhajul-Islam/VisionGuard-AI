@@ -1,5 +1,7 @@
 # VisionGuard AI — Phase 2 Research Prototype
 
+Sprint 3 adds a commercial engineering foundation—authenticated local access, role-based authorization, detector adapters, reproducible benchmark records, and crash-recovery safeguards. It does **not** make VisionGuard production-ready or safety-certified.
+
 VisionGuard AI is an offline, human-reviewed video research workspace for semantic moment retrieval and experimental industrial-safety review. It processes authorized recorded footage only. It does **not** connect to live CCTV, recognize faces, identify people, infer intent, or confirm incidents automatically.
 
 This repository is independent from the OpenAI CLIP source repository. It consumes the original OpenAI CLIP package and ViT-B/32 weights at runtime with attribution; no pretrained weights or raw footage are committed.
@@ -40,6 +42,8 @@ flowchart LR
 
 See [Architecture](docs/ARCHITECTURE.md), [Models](docs/MODELS.md), [Evaluation](docs/EVALUATION.md), [Phase 2 generalization](docs/PHASE2_GENERALIZATION.md), [Motion fusion](docs/MOTION_FUSION_EXPERIMENTS.md), [Obstruction validation](docs/OBSTRUCTION_VALIDATION.md), [Real datasets](docs/REAL_DATASETS.md), [Safety](docs/SAFETY_AND_LIMITATIONS.md), and the [2–3 minute demo](docs/DEMO_GUIDE.md).
 
+Commercial-foundation documents: [readiness audit](docs/COMMERCIAL_READINESS_AUDIT.md), [detector benchmark](docs/DETECTOR_BENCHMARK.md), [model selection](docs/MODEL_SELECTION.md), [licensing](docs/COMMERCIAL_LICENSING.md), [MLOps](docs/MLOPS_FOUNDATION.md), [production direction](docs/PRODUCTION_ARCHITECTURE.md), and [release gates](docs/RELEASE_GATES.md).
+
 ![Event evidence viewer](docs/images/phase1-5-evidence-viewer.png)
 
 ## Windows setup
@@ -49,7 +53,7 @@ Prerequisites: Python 3.10–3.14, Node.js 20+, NVIDIA CUDA-compatible PyTorch i
 ```powershell
 git clone https://github.com/MDMinhajul-Islam/VisionGuard-AI.git
 cd VisionGuard-AI
-git switch feat/phase2-robust-safety-validation
+git switch feat/commercial-foundation-detector-benchmark
 python -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
@@ -63,6 +67,14 @@ cd ..
 ```
 
 Use CPU wheels instead if CUDA is unavailable. Models are lazy-loaded and CUDA falls back to CPU. Copy `.env.example` to `.env` only when changing defaults.
+
+Generate a strong local `VISIONGUARD_AUTH_SECRET` in `.env`, then create the first administrator interactively:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\create_user.py --email admin@example.local --name "Local Administrator" --role admin
+```
+
+No default password is provided. Outside development mode, token creation refuses to proceed without an explicitly configured secret.
 
 ## Run
 
@@ -80,7 +92,7 @@ cd frontend
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
-Open `http://127.0.0.1:3000`; API docs are local at `http://127.0.0.1:8000/docs`. CORS defaults to localhost only. This prototype has no authentication and must not be exposed publicly.
+Open `http://127.0.0.1:3000/login` and sign in; API docs remain local at `http://127.0.0.1:8000/docs`. Administrators manage ingestion/configuration, while reviewers inspect evidence, record decisions, and export clips. This remains local-only and must not be exposed publicly.
 
 Generate, seed, process, and evaluate the controlled fixture:
 

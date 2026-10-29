@@ -37,6 +37,17 @@ class Video(Base):
     jobs: Mapped[list["ProcessingJob"]] = relationship(back_populates="video", cascade="all, delete-orphan")
 
 
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(String(24), index=True)
+    disabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+
+
 class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)

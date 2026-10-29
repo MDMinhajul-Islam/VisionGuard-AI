@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+import secrets
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +27,9 @@ class Settings(BaseSettings):
     process_width: int = Field(default=640, ge=224, le=1280)
     detection_threshold: float = Field(default=0.45, ge=0.05, le=0.99)
     device: str = "auto"
+    auth_secret: str | None = None
+    auth_token_minutes: int = Field(default=480, ge=5, le=10080)
+    auth_cookie_secure: bool = False
     database_url: str | None = None
     runtime_dir: Path = PROJECT_ROOT / "runtime"
     model_dir: Path = PROJECT_ROOT / "models"
@@ -38,6 +42,15 @@ class Settings(BaseSettings):
     @property
     def db_url(self) -> str:
         return self.database_url or f"sqlite:///{(self.runtime_dir / 'visionguard.db').as_posix()}"
+
+    def effective_auth_secret(self) -> str:
+        if self.auth_secret:
+            return self.auth_secret
+        if self.env.lower() in {"production", "pilot"}:
+            raise RuntimeError("VISIONGUARD_AUTH_SECRET is required outside local development")
+        if not hasattr(self, "_development_auth_secret"):
+            object.__setattr__(self, "_development_auth_secret", secrets.token_urlsafe(48))
+        return self._development_auth_secret
 
     @property
     def uploads_dir(self) -> Path:

@@ -12,6 +12,27 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=12, max_length=256)
+
+
+class UserCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    display_name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=12, max_length=256)
+    role: Literal["admin", "reviewer"]
+
+
+class UserOut(ORMModel):
+    id: str
+    email: str
+    display_name: str
+    role: str
+    disabled: bool
+    created_at: str
+
+
 class VideoOut(ORMModel):
     id: str
     original_filename: str

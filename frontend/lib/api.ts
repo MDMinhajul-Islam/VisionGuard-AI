@@ -70,7 +70,7 @@ export function asset(path?: string | null) {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {cache: "no-store", ...init});
+  const response = await fetch(`${API_BASE}${path}`, {cache: "no-store", credentials: "include", ...init});
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {

@@ -7,6 +7,8 @@ from pathlib import Path
 
 import httpx
 
+from api_auth import authenticated_client
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,7 +21,7 @@ def main() -> int:
     args = parser.parse_args()
     report_root = PROJECT_ROOT / "data" / "external" / "validation" / "reports"
     report_root.mkdir(parents=True, exist_ok=True)
-    with httpx.Client(base_url=args.api, timeout=120) as client:
+    with authenticated_client(args.api, 120) as client:
         response = client.get("/api/datasets/evaluation", params={"dataset_name": args.dataset, "completed_only": "true"})
         response.raise_for_status()
         report = response.json()

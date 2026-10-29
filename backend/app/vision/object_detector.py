@@ -11,6 +11,7 @@ from torchvision.models.detection import (
 )
 
 from app.core.config import get_settings
+from app.vision.detectors.base import DetectorMetadata, validate_detections
 
 
 class ObjectDetector:
@@ -24,6 +25,17 @@ class ObjectDetector:
         self.categories = None
         self._lock = threading.Lock()
         self.last_inference_ms = None
+
+    @property
+    def metadata(self) -> DetectorMetadata:
+        return DetectorMetadata(
+            model_id=self.model_name, model_version="COCO_V1",
+            architecture="SSDLite320 MobileNetV3 Large",
+            checkpoint="models/torch/checkpoints/ssdlite320_mobilenet_v3_large_coco-a79551df.pth",
+            license="Torchvision BSD-3-Clause; checkpoint/training-data provenance requires release review",
+            commercial_runtime_eligible=False, device=str(self.device),
+            class_names=tuple(self.categories or ()),
+        )
 
     def load(self):
         if self.model is None:
@@ -65,7 +77,12 @@ class ObjectDetector:
                 "confidence": confidence,
                 "bbox_pixels": (x1, y1, x2, y2),
                 "bbox": (x1 / width, y1 / height, x2 / width, y2 / height),
+                "model_id": self.model_name,
+                "model_version": "COCO_V1",
+                "device": str(self.device),
+                "provenance": "torchvision:ssdlite320_mobilenet_v3_large:COCO_V1",
             })
+        validate_detections(results)
         return results
 
     def unload(self):
