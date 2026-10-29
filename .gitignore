@@ -14,6 +14,11 @@ next-env.d.ts
 out/
 runtime/
 models/
+data/external/
+data/**/*.mp4
+data/**/*.zip
+data/**/*.tar.gz
+data/**/*.png
 *.pt
 *.pth
 *.task

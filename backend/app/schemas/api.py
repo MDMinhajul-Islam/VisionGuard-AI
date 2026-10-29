@@ -167,3 +167,20 @@ class EvaluationRequest(BaseModel):
     temporal_iou_threshold: float = Field(default=0.3, ge=0, le=1)
     onset_tolerance_seconds: float = Field(default=1.0, ge=0, le=30)
 
+
+class DatasetAssetCreate(BaseModel):
+    video_id: str = Field(min_length=1, max_length=64)
+    dataset_name: str = Field(min_length=2, max_length=160)
+    original_recording_id: str = Field(min_length=1, max_length=160)
+    evaluation_label: Literal["fall", "non_fall"]
+    detailed_label: str | None = Field(default=None, max_length=120)
+    source_url: str = Field(min_length=8, max_length=2000)
+    source_license: str = Field(min_length=3, max_length=1000)
+    annotation_status: Literal["video_level_only", "source_frame_labels", "human_temporal"]
+    manifest_record: dict = Field(default_factory=dict)
+
+
+class DatasetAssetOut(DatasetAssetCreate):
+    id: str
+    imported_at: str
+

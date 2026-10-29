@@ -1,6 +1,6 @@
 import type {Metadata} from "next";
 import Link from "next/link";
-import {Activity, Boxes, Clapperboard, ClipboardCheck, Gauge, Info, Search, ShieldCheck} from "lucide-react";
+import {Activity, Boxes, Clapperboard, ClipboardCheck, Database, Gauge, Info, Search, ShieldCheck} from "lucide-react";
 import "./globals.css";
 
 export const metadata: Metadata = {title: "VisionGuard AI", description: "Offline research video analysis and human review"};
@@ -10,6 +10,7 @@ const nav = [
   ["Semantic Search", "/search", Search], ["Safety Analysis", "/safety", ShieldCheck],
   ["Incident Review", "/review", Activity], ["Models & System", "/system", Info],
   ["Validation", "/validation", ClipboardCheck],
+  ["Dataset Evaluation", "/datasets", Database],
 ] as const;
 
 export default function RootLayout({children}: Readonly<{children: React.ReactNode}>) {

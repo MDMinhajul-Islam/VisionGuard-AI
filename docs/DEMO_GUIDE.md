@@ -1,5 +1,17 @@
 # 2–3 minute demo
 
+## Real-dataset workflow
+
+1. Start FastAPI and Next.js with the README commands, then open `http://127.0.0.1:3000/datasets`.
+2. Show the source/license boundary, 10 fall + 10 non-fall counts, and actual 4 TP / 1 FP / 9 TN / 6 FN confusion matrix.
+3. Click `fall-02`. Play the locally served imported MP4 and use its event-timestamp button to seek to the real model candidate.
+4. Contrast `adl-30` (false positive) with a missed fall such as `fall-26`. State that predictions, source labels, and human review are separate records.
+5. Export the evaluation JSON. Show `docs/REAL_VIDEO_EVALUATION.md` for timing, failure analysis, and annotation caveats.
+
+Dataset media and diagnostic participant frames remain local under ignored `data/external/`. Do not publish or screen-share them without checking the dataset license and participant/privacy context.
+
+## Synthetic plumbing workflow
+
 1. Start FastAPI on `127.0.0.1:8000` and Next.js on `127.0.0.1:3000` using the README commands.
 2. If the library is empty, run `generate_demo.py`, `seed_demo.py`, and `process_demo.py`. State aloud that the clip is synthetic and the review event is a fixture, not model output.
 3. Open **Video Workspace**. Show FFprobe metadata, indexed status, processing controls, playback, and extracted frames.

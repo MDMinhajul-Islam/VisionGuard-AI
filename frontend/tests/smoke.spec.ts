@@ -6,7 +6,7 @@ test("real dashboard routes render and backend data is visible", async ({page}) 
   await expect(page.getByText("Controlled research mode.")).toBeVisible();
   await page.getByRole("link", {name: /Video Workspace/}).click();
   await expect(page.getByRole("heading", {name: "Video workspace"})).toBeVisible();
-  await expect(page.getByText("visionguard_demo.mp4")).toBeVisible();
+  await expect(page.getByRole("heading", {name:"Local video library"})).toBeVisible();
   await page.getByRole("link", {name: /Semantic Search/}).click();
   await expect(page.getByRole("heading", {name: "Search visual moments"})).toBeVisible();
   await page.getByRole("link", {name: /Models & System/}).click();
@@ -14,25 +14,31 @@ test("real dashboard routes render and backend data is visible", async ({page}) 
   await expect(page.getByText(/NVIDIA GeForce|CPU fallback/)).toBeVisible();
 });
 
-test("event evidence, actual video playback, overlays, and validation workflow", async ({page}) => {
-  await page.goto("/review");
-  await page.getByRole("button", {name: /Synthetic Fixture/}).click();
-  await expect(page.getByRole("heading", {name:"Computer vision evidence viewer"})).toBeVisible();
+test("real imported video playback and model-result inspection", async ({page}) => {
+  test.setTimeout(60_000);
+  const assetsResponse=page.waitForResponse(response=>response.url().endsWith("/api/datasets/assets"));
+  await page.goto("/datasets");
+  expect((await assetsResponse).ok()).toBeTruthy();
+  await expect(page.getByRole("heading", {name:"Dataset evaluation"})).toBeVisible();
+  await page.getByRole("button", {name:"fall-02"}).click();
+  await expect(page.getByRole("heading", {name:"fall-02"})).toBeVisible();
   const video = page.locator("video");
   await expect(video).toBeVisible();
   await expect.poll(()=>video.evaluate(element=>(element as HTMLVideoElement).readyState)).toBeGreaterThan(0);
-  await expect(page.getByAltText(/Original frame/)).toBeVisible();
-  await expect(page.getByAltText(/Model overlay/)).toBeVisible();
-  await expect(page.getByText("SYNTHETIC FIXTURE — NOT MODEL-GENERATED EVIDENCE")).toBeVisible();
-  await page.getByRole("button", {name:"Next evidence frame"}).click();
-  await page.screenshot({path:"../docs/images/phase1-5-evidence-viewer.png",fullPage:true});
+  await expect(page.getByText("Potential fall candidate", {exact:true})).toBeVisible();
+  await expect(page.getByText("source frame labels", {exact:true}).last()).toBeVisible();
+});
 
-  await page.getByRole("link", {name:"Validation"}).click();
-  await expect(page.getByRole("heading", {name:"Validation annotations"})).toBeVisible();
-  await expect(page.getByText("synthetic_generator_known_content")).toBeVisible();
-  await page.getByLabel("Dataset split").selectOption("development");
-  await page.getByRole("button", {name:/Evaluate predictions/}).click();
-  await expect(page.getByText(/Metrics describe only this annotated local set and are not evidence of generalization/)).toBeVisible();
-  await page.screenshot({path:"../docs/images/phase1-5-validation.png",fullPage:true});
+test("dataset evaluation workspace separates provenance and predictions", async ({page}) => {
+  const evaluationResponse=page.waitForResponse(response=>response.url().includes("/api/datasets/evaluation"));
+  await page.goto("/datasets");
+  expect((await evaluationResponse).ok()).toBeTruthy();
+  await expect(page.getByRole("heading", {name:"Dataset evaluation"})).toBeVisible();
+  await expect(page.getByText("Video-level confusion matrix")).toBeVisible();
+  await expect(page.getByText(/Video labels are not treated as temporal annotations/)).toBeVisible();
+  await expect(page.getByText("80.0%", {exact:true})).toBeVisible();
+  await expect(page.getByText("40.0%", {exact:true})).toBeVisible();
+  await expect(page.getByText("53.3%", {exact:true})).toBeVisible();
+  await page.screenshot({path:"../data/external/validation/reports/dataset-evaluation-dashboard.png"});
 });
 

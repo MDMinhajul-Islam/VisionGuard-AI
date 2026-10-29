@@ -15,6 +15,7 @@ This repository is independent from the OpenAI CLIP source repository. It consum
 - Deterministic ground-truth annotations and one-to-one event-level precision/recall/F1/delay evaluation.
 - SQLite metadata, local artifact storage, video seeking, event notes, and safe FFmpeg MP4 export.
 - Interactive original/overlay frame viewer and validation dashboard backed entirely by real API/database state.
+- Reproducible official-source research-dataset acquisition, safe extraction/conversion, provenance import, real-video evaluation, and a local Dataset Evaluation workspace.
 
 Safety outputs are candidates only: **Potential Fall — Review Required** and **Potential Exit Obstruction — Review Required**. The included safety event is explicitly marked as a synthetic UI fixture, not model evidence.
 
@@ -36,7 +37,7 @@ flowchart LR
   N --> E[Human decision + clip export]
 ```
 
-See [Architecture](docs/ARCHITECTURE.md), [Models](docs/MODELS.md), [Evaluation](docs/EVALUATION.md), [Real-video validation](docs/REAL_VIDEO_VALIDATION.md), [Phase 1.5 audit](docs/PHASE_1_5_AUDIT.md), [Safety](docs/SAFETY_AND_LIMITATIONS.md), and the [2–3 minute demo](docs/DEMO_GUIDE.md).
+See [Architecture](docs/ARCHITECTURE.md), [Models](docs/MODELS.md), [Evaluation](docs/EVALUATION.md), [Real datasets](docs/REAL_DATASETS.md), [Real-video evaluation](docs/REAL_VIDEO_EVALUATION.md), [Safety](docs/SAFETY_AND_LIMITATIONS.md), and the [2–3 minute demo](docs/DEMO_GUIDE.md).
 
 ![Event evidence viewer](docs/images/phase1-5-evidence-viewer.png)
 
@@ -47,7 +48,7 @@ Prerequisites: Python 3.10–3.14, Node.js 20+, NVIDIA CUDA-compatible PyTorch i
 ```powershell
 git clone https://github.com/MDMinhajul-Islam/VisionGuard-AI.git
 cd VisionGuard-AI
-git switch feat/visionguard-phase1-mvp
+git switch feat/real-dataset-validation
 python -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
@@ -102,7 +103,18 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Latest verified evidence is in [evaluations/latest_results.json](evaluations/latest_results.json). On the local RTX 3050 Ti run, 31 deterministic/API tests and 3 real-model tests passed; the Next.js production build and two Chromium workflows also passed. These are engineering checks, not safety accuracy claims.
+Latest verified synthetic engineering evidence is in [evaluations/latest_results.json](evaluations/latest_results.json). On the real-dataset branch, 44 deterministic/API tests and 3 genuine model-integration tests passed; frontend lint had zero errors, the Next.js production build passed, and all three Chromium workflows passed. These are engineering checks, not safety accuracy claims.
+
+The real-video baseline is recorded in [evaluations/ur_fall_real_evaluation.json](evaluations/ur_fall_real_evaluation.json): 20/20 UR videos processed, video-level precision 0.800, recall 0.400, and F1 0.533. This is a small exploratory result with six missed falls and one ADL false alarm—not a safety-performance claim. See [the full protocol and failure analysis](docs/REAL_VIDEO_EVALUATION.md).
+
+Acquire, prepare, import, process, and evaluate the fixed research subset:
+
+```powershell
+.\.venv\Scripts\python .\scripts\download_research_datasets.py --dataset ur
+.\.venv\Scripts\python .\scripts\prepare_research_videos.py --dataset ur
+.\.venv\Scripts\python .\scripts\import_validation_videos.py .\data\external\validation\manifests\ur-balanced-20.json --api http://127.0.0.1:8000 --process
+.\.venv\Scripts\python .\scripts\evaluate_real_falls.py --api http://127.0.0.1:8000
+```
 
 Ground-truth manifests can be validated/imported without changing application code:
 
@@ -122,11 +134,11 @@ VisionGuard source is MIT licensed. OpenAI CLIP is MIT licensed and governed by 
 ## Current limitations
 
 - No operational safety certification or real-world event accuracy estimate.
-- Fall rules passed deterministic sequences and real pose inference separately; no authorized staged fall video was available for end-to-end validation.
+- Fall rules were run end-to-end on 20 licensed UR research recordings; the small baseline missed 6/10 falls and falsely alerted on 1/10 ADLs.
 - Exit logic passed deterministic persistence/geometry tests; the synthetic drawing did not yield a model-generated obstruction event.
 - COCO SSDLite does not provide reliable helmet, vest, exit-sign, smoke, fire, or generic hazard classes.
 - The SQLite queue is one-process/local and is not durable against a host process crash.
 - Temporary track IDs exist only within one recording; there is no re-identification.
-- No appropriately licensed/consented staged fall or physical obstruction video was present, so real safety-event precision/recall remains undefined.
+- IKAR acquisition remains blocked by official-host timeouts; no suitable physical-obstruction video set was acquired, so obstruction accuracy remains undefined.
 
 The highest-value next milestone is a small, consented, staged and frame/event-labeled validation set for falls and keep-clear zones, followed by threshold calibration and event-level error analysis.

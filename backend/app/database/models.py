@@ -168,3 +168,22 @@ class ValidationAnnotation(Base):
         Index("ix_annotation_video_type_time", "video_id", "event_type", "start_seconds"),
     )
 
+
+class DatasetAsset(Base):
+    __tablename__ = "dataset_assets"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    video_id: Mapped[str] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), unique=True, index=True)
+    dataset_name: Mapped[str] = mapped_column(String(160), index=True)
+    original_recording_id: Mapped[str] = mapped_column(String(160), index=True)
+    evaluation_label: Mapped[str] = mapped_column(String(24), index=True)
+    detailed_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_url: Mapped[str] = mapped_column(Text)
+    source_license: Mapped[str] = mapped_column(Text)
+    annotation_status: Mapped[str] = mapped_column(String(64))
+    manifest_record_json: Mapped[str] = mapped_column(Text, default="{}")
+    imported_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+
+    __table_args__ = (
+        UniqueConstraint("dataset_name", "original_recording_id", name="uq_dataset_recording"),
+    )
+

@@ -2,7 +2,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-from app.database.models import CandidateEvent, ObjectDetection, PoseEvidence, SafetyZone, ValidationAnnotation, Video, VideoFrame
+from app.database.models import CandidateEvent, DatasetAsset, ObjectDetection, PoseEvidence, SafetyZone, ValidationAnnotation, Video, VideoFrame
 from app.database.session import SessionLocal
 from app.main import app
 
@@ -104,4 +104,25 @@ def test_zone_reanalysis_preserves_reviewed_event_without_duplicate():
     db = SessionLocal()
     assert db.get(CandidateEvent, reviewed.id).review_status == "false_positive"
     db.close()
+
+
+def test_dataset_asset_registration_is_idempotent_and_video_metrics_are_real_predictions():
+    db = SessionLocal()
+    video = Video(id="v-dataset", original_filename="fall-01.mp4", stored_filename="dataset-fall-01.mp4", path="unused.mp4", size_bytes=1, duration_seconds=3, status="indexed")
+    event = CandidateEvent(id="e-dataset", video_id=video.id, event_type="potential_fall", label="Potential Fall — Review Required", start_seconds=1, end_seconds=2, processing_method="pose_temporal_rules", model_version="test", raw_scores_json="{}", thresholds_json="{}", supporting_frames_json="[]", synthetic_fixture=False)
+    db.merge(video); db.merge(event); db.commit(); db.close()
+    payload = {
+        "video_id": video.id, "dataset_name": "Research Set", "original_recording_id": "fall-01",
+        "evaluation_label": "fall", "source_url": "https://example.edu/dataset",
+        "source_license": "research license", "annotation_status": "video_level_only",
+        "manifest_record": {"prepared_sha256": "abc"},
+    }
+    with TestClient(app) as client:
+        first = client.post("/api/datasets/assets", json=payload)
+        second = client.post("/api/datasets/assets", json=payload)
+        assert first.status_code == second.status_code == 201
+        assert first.json()["id"] == second.json()["id"]
+        result = client.get("/api/datasets/evaluation", params={"dataset_name": "Research Set", "completed_only": "false"}).json()
+        assert result["metrics"]["true_positives"] == 1
+        assert result["records"][0]["candidate_timestamps"] == [1.0]
 

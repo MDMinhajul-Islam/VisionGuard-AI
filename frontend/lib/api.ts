@@ -34,6 +34,20 @@ export type ValidationAnnotation = {
   query_text:string|null;split:string;created_at:string;
 };
 
+export type DatasetAsset = {
+  id:string;video_id:string;dataset_name:string;original_recording_id:string;
+  evaluation_label:"fall"|"non_fall";detailed_label:string|null;source_url:string;
+  source_license:string;annotation_status:string;manifest_record:Record<string,unknown>;imported_at:string;
+  video:Video|null;latest_job:{id:string;status:string;progress:number;stage:string;metrics_json:string}|null;
+  predicted_fall:boolean;predicted_event_count:number;predicted_events:EventCandidate[];
+};
+
+export type DatasetEvaluation = {
+  dataset_name:string;protocol:string;event_level_warning:string;
+  metrics:{videos:number;true_positives:number;false_positives:number;true_negatives:number;false_negatives:number;precision:number|null;recall:number|null;f1:number|null;false_positive_ids:string[];false_negative_ids:string[];undefined_metrics:string[]};
+  records:{asset_id:string;record_id:string;video_id:string;ground_truth:string;predicted_fall:boolean;event_count:number;candidate_timestamps:number[];processing_status:string;processing_metrics:Record<string,unknown>;duration_seconds:number|null;annotation_status:string}[];
+};
+
 export function asset(path?: string | null) {
   if (!path) return "";
   return path.startsWith("http") ? path : `${API_BASE}${path}`;

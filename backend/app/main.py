@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -21,16 +22,17 @@ from app import __version__
 from app.core.config import get_settings
 from app.database import get_db, init_db
 from app.database.models import (
-    CandidateEvent, EmbeddingCache, ExportedClip, ObjectDetection, PoseEvidence,
+    CandidateEvent, DatasetAsset, EmbeddingCache, ExportedClip, ObjectDetection, PoseEvidence,
     ProcessingJob, SafetyZone, ValidationAnnotation, Video, VideoFrame,
 )
 from app.schemas.api import (
-    AnnotationCreate, AnnotationOut, EvaluationRequest, ExportRequest, JobOut,
+    AnnotationCreate, AnnotationOut, DatasetAssetCreate, DatasetAssetOut, EvaluationRequest, ExportRequest, JobOut,
     ProcessRequest, ReviewUpdate, SearchRequest, SearchResponse, SearchResult,
     VideoOut, ZoneAnalysisRequest, ZoneCreate,
 )
 from app.evaluation.annotations import deterministic_annotation_id
 from app.evaluation.metrics import IntervalEvent, evaluate_events, temporal_iou
+from app.evaluation.video_level import VideoPrediction, evaluate_video_predictions
 from app.services.exporter import export_clip
 from app.services.video_io import SUPPORTED_EXTENSIONS, find_binary, probe_video, render_overlay, safe_within
 from app.vision.clip_engine import clip_engine
@@ -96,6 +98,28 @@ def event_dict(event: CandidateEvent):
         "supporting_frames": json.loads(event.supporting_frames_json),
         "review_status": event.review_status, "reviewer_note": event.reviewer_note,
         "synthetic_fixture": event.synthetic_fixture, "created_at": event.created_at,
+    }
+
+
+def dataset_asset_dict(asset: DatasetAsset, db: Session) -> dict:
+    video = db.get(Video, asset.video_id)
+    latest_job = db.scalar(select(ProcessingJob).where(ProcessingJob.video_id == asset.video_id).order_by(ProcessingJob.created_at.desc()))
+    events = db.scalars(select(CandidateEvent).where(
+        CandidateEvent.video_id == asset.video_id,
+        CandidateEvent.event_type == "potential_fall",
+        CandidateEvent.synthetic_fixture.is_(False),
+    ).order_by(CandidateEvent.start_seconds)).all()
+    return {
+        "id": asset.id, "video_id": asset.video_id, "dataset_name": asset.dataset_name,
+        "original_recording_id": asset.original_recording_id,
+        "evaluation_label": asset.evaluation_label, "detailed_label": asset.detailed_label,
+        "source_url": asset.source_url, "source_license": asset.source_license,
+        "annotation_status": asset.annotation_status,
+        "manifest_record": json.loads(asset.manifest_record_json), "imported_at": asset.imported_at,
+        "video": video_out(video).model_dump() if video else None,
+        "latest_job": JobOut.model_validate(latest_job).model_dump() if latest_job else None,
+        "predicted_fall": bool(events), "predicted_event_count": len(events),
+        "predicted_events": [event_dict(event) for event in events],
     }
 
 
@@ -497,6 +521,107 @@ def evaluate_video(video_id: str, request: EvaluationRequest, db: Session = Depe
         request.temporal_iou_threshold, request.onset_tolerance_seconds,
     )
     return {**result, "video_id": video_id, "event_type": request.event_type, "split": request.split, "annotations_total": annotations_total, "positive_annotations": len(positives), "prediction_count": len(predictions), "warning": "Metrics describe only this annotated local set and are not evidence of generalization."}
+
+
+@app.post("/api/datasets/assets", response_model=DatasetAssetOut, status_code=201)
+def register_dataset_asset(request: DatasetAssetCreate, db: Session = Depends(get_db)):
+    if not db.get(Video, request.video_id):
+        raise HTTPException(404, "video not found")
+    deterministic_id = "ds-" + hashlib.sha256(
+        f"{request.dataset_name}|{request.original_recording_id}".encode("utf-8")
+    ).hexdigest()[:32]
+    existing = db.scalar(select(DatasetAsset).where(
+        DatasetAsset.dataset_name == request.dataset_name,
+        DatasetAsset.original_recording_id == request.original_recording_id,
+    ))
+    if existing:
+        if existing.video_id != request.video_id:
+            raise HTTPException(409, detail={"code": "dataset_record_already_imported", "video_id": existing.video_id})
+        existing.evaluation_label = request.evaluation_label
+        existing.detailed_label = request.detailed_label
+        existing.source_url = request.source_url
+        existing.source_license = request.source_license
+        existing.annotation_status = request.annotation_status
+        existing.manifest_record_json = json.dumps(request.manifest_record, sort_keys=True)
+        db.commit()
+        return DatasetAssetOut(
+            id=existing.id, video_id=existing.video_id, dataset_name=existing.dataset_name,
+            original_recording_id=existing.original_recording_id, evaluation_label=existing.evaluation_label,
+            detailed_label=existing.detailed_label, source_url=existing.source_url,
+            source_license=existing.source_license, annotation_status=existing.annotation_status,
+            manifest_record=json.loads(existing.manifest_record_json), imported_at=existing.imported_at,
+        )
+    asset = DatasetAsset(
+        id=deterministic_id, video_id=request.video_id, dataset_name=request.dataset_name,
+        original_recording_id=request.original_recording_id, evaluation_label=request.evaluation_label,
+        detailed_label=request.detailed_label, source_url=request.source_url,
+        source_license=request.source_license, annotation_status=request.annotation_status,
+        manifest_record_json=json.dumps(request.manifest_record, sort_keys=True),
+    )
+    db.add(asset); db.commit()
+    return DatasetAssetOut(**request.model_dump(), id=asset.id, imported_at=asset.imported_at)
+
+
+@app.get("/api/datasets/assets")
+def list_dataset_assets(dataset_name: str | None = None, db: Session = Depends(get_db)):
+    statement = select(DatasetAsset).order_by(DatasetAsset.dataset_name, DatasetAsset.original_recording_id)
+    if dataset_name:
+        statement = statement.where(DatasetAsset.dataset_name == dataset_name)
+    return [dataset_asset_dict(asset, db) for asset in db.scalars(statement).all()]
+
+
+@app.get("/api/datasets/summary")
+def dataset_summary(db: Session = Depends(get_db)):
+    assets = db.scalars(select(DatasetAsset)).all()
+    names = sorted({asset.dataset_name for asset in assets})
+    return {
+        "datasets": [{
+            "name": name,
+            "videos": sum(asset.dataset_name == name for asset in assets),
+            "falls": sum(asset.dataset_name == name and asset.evaluation_label == "fall" for asset in assets),
+            "non_falls": sum(asset.dataset_name == name and asset.evaluation_label == "non_fall" for asset in assets),
+            "license": next(asset.source_license for asset in assets if asset.dataset_name == name),
+            "source_url": next(asset.source_url for asset in assets if asset.dataset_name == name),
+        } for name in names],
+        "total_videos": len(assets),
+    }
+
+
+@app.get("/api/datasets/evaluation")
+def dataset_evaluation(dataset_name: str | None = None, completed_only: bool = True, db: Session = Depends(get_db)):
+    statement = select(DatasetAsset).order_by(DatasetAsset.original_recording_id)
+    if dataset_name:
+        statement = statement.where(DatasetAsset.dataset_name == dataset_name)
+    assets = db.scalars(statement).all()
+    rows = []
+    predictions = []
+    for asset in assets:
+        video = db.get(Video, asset.video_id)
+        latest_job = db.scalar(select(ProcessingJob).where(ProcessingJob.video_id == asset.video_id).order_by(ProcessingJob.created_at.desc()))
+        if completed_only and (not latest_job or latest_job.status != "completed"):
+            continue
+        events = db.scalars(select(CandidateEvent).where(
+            CandidateEvent.video_id == asset.video_id,
+            CandidateEvent.event_type == "potential_fall",
+            CandidateEvent.synthetic_fixture.is_(False),
+        ).order_by(CandidateEvent.start_seconds)).all()
+        prediction = VideoPrediction(asset.original_recording_id, asset.evaluation_label, bool(events), len(events))
+        predictions.append(prediction)
+        rows.append({
+            "asset_id": asset.id, "record_id": asset.original_recording_id, "video_id": asset.video_id,
+            "ground_truth": asset.evaluation_label, "predicted_fall": bool(events),
+            "event_count": len(events), "candidate_timestamps": [event.start_seconds for event in events],
+            "processing_status": latest_job.status if latest_job else "not_started",
+            "processing_metrics": json.loads(latest_job.metrics_json) if latest_job and latest_job.metrics_json else {},
+            "duration_seconds": video.duration_seconds if video else None,
+            "annotation_status": asset.annotation_status,
+        })
+    return {
+        "dataset_name": dataset_name or "all imported datasets",
+        "protocol": "video-level: any non-synthetic potential_fall candidate counts as a positive prediction",
+        "metrics": evaluate_video_predictions(predictions), "records": rows,
+        "event_level_warning": "Event-level metrics require verified temporal annotations and are not inferred from video-level labels.",
+    }
 
 
 @app.patch("/api/events/{event_id}/review")
