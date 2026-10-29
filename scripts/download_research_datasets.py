@@ -52,7 +52,7 @@ def selected_ur_ids(seed: int, falls: int, non_falls: int) -> tuple[list[int], l
     return sorted(rng.sample(range(1, 31), falls)), sorted(rng.sample(range(1, 41), non_falls))
 
 
-def download_ur(seed: int, falls: int, non_falls: int) -> Path:
+def download_ur(seed: int, falls: int, non_falls: int, manifest_name: str = "download_manifest.json") -> Path:
     root = DATA_ROOT / "ur_fall"
     archives = root / "archives"
     fall_ids, adl_ids = selected_ur_ids(seed, falls, non_falls)
@@ -86,7 +86,7 @@ def download_ur(seed: int, falls: int, non_falls: int) -> Path:
         "selection": {"fall_ids": fall_ids, "adl_ids": adl_ids},
         "source_annotation_files": annotation_files, "records": records,
     }
-    path = root / "download_manifest.json"
+    path = root / manifest_name
     write_json(path, manifest)
     print(f"Wrote {path}")
     return path
@@ -145,13 +145,14 @@ def main() -> int:
     parser.add_argument("--falls", type=int, default=10)
     parser.add_argument("--non-falls", type=int, default=10)
     parser.add_argument("--seed", type=int, default=20261028)
+    parser.add_argument("--manifest-name", default="download_manifest.json")
     args = parser.parse_args()
     if not 1 <= args.falls <= 30 or not 1 <= args.non_falls <= 40:
         parser.error("UR sample counts are out of range")
     failures = []
     for name, action in (
         ("ikar", download_ikar),
-        ("ur", lambda: download_ur(args.seed, args.falls, args.non_falls)),
+        ("ur", lambda: download_ur(args.seed, args.falls, args.non_falls, args.manifest_name)),
         ("fallvision-inventory", inspect_fallvision),
     ):
         if args.dataset not in {name, "all"}:

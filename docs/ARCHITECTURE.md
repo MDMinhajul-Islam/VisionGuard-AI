@@ -1,5 +1,9 @@
 # Architecture
 
+## Phase 2 evaluation boundary
+
+Dataset assets retain provenance and video-level source labels separately from predictions. The original 20-video development cohort is explicitly selected by the evaluation API; newly imported recording-disjoint assets cannot silently alter its preserved baseline. Cached MediaPipe observations feed baseline, shape-gated, and motion-fusion replay, while reports keep development and independent metrics separate.
+
 ## Boundaries
 
 VisionGuard is a local modular monorepo: FastAPI owns validation, compute, metadata, and safe file delivery; Next.js is a client of the REST API. Large binaries never enter SQLite. Every filesystem lookup is derived from generated IDs and checked against an allowed runtime root.

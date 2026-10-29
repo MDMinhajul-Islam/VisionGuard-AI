@@ -50,7 +50,7 @@ export type DatasetEvaluation = {
 
 export type PoseDiagnosticPoint = {
   timestamp_seconds:number;state:string;torso_angle_degrees:number;aspect_ratio:number;
-  hip_y:number|null;vertical_drop_from_recent_upright:number|null;visibility:number;
+  hip_y:number|null;bbox_center_y:number|null;bbox_width:number|null;bbox_height:number|null;vertical_drop_from_recent_upright:number|null;visibility:number;
   missing_landmarks:number[];missing_lower_body:number[];frame_id:string;image_url:string;overlay_url:string;
 };
 
@@ -60,7 +60,7 @@ export type DatasetDiagnostic = {
   timeline:PoseDiagnosticPoint[];
   source_intervals:{id:string;start_seconds:number;end_seconds:number;label:string;source:string}[];
   stored_baseline_events:EventCandidate[];
-  profiles:Record<"baseline"|"improved",{thresholds:Record<string,number|string>;events:{start_seconds:number;end_seconds:number;confidence_signal:number;evidence:Record<string,unknown>}[]}>;
+  profiles:Record<"baseline"|"improved"|"motion_fusion",{thresholds:Record<string,number|string>;events:{start_seconds:number;end_seconds:number;confidence_signal:number;evidence:Record<string,unknown>}[]}>;
   warning:string;
 };
 

@@ -1,5 +1,9 @@
 # Models and algorithms
 
+## Phase 2 motion fusion
+
+`bbox-motion-fusion-v1` combines MediaPipe temporal pose state with motion of the normalized landmark bounding box. It requires a recent upright pose, downward center displacement, a body-shape transition, and a sufficiently wide ending pose. Missing landmarks are never imputed into evidence. An experimental camera-compensated Farneback optical-flow utility is tested but does not participate in alert decisions. See [MOTION_FUSION_EXPERIMENTS.md](MOTION_FUSION_EXPERIMENTS.md) for thresholds, independent results, and failure modes.
+
 ## OpenAI CLIP ViT-B/32
 
 The original OpenAI package and official preprocessing/tokenization are installed from pinned upstream commit `d05afc2a98f2c58574a05c3679d992cf765c940f`. Image and text outputs are normalized 512-dimensional embeddings. Similarity is a ranking signal, **not** a probability. CLIP is lazy-loaded, cached locally, and unloaded before detection when GPU memory is constrained.

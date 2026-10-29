@@ -1,5 +1,14 @@
 # 2–3 minute demo
 
+## Phase 2 profile comparison
+
+1. Open `http://127.0.0.1:3000/datasets` and select one of the ten Phase 2 recordings listed in `docs/PHASE2_GENERALIZATION.md`.
+2. Compare baseline, shape-gated, and motion-fusion candidate markers without changing thresholds.
+3. Inspect the synchronized landmark bounding-box center chart, torso/aspect signals, missing-pose state, and raw threshold block.
+4. Select `fall-29` to show the honest remaining false negative: 25/34 sufficient samples, weak measured orientation/drop evidence.
+5. State that 4 TP / 0 FP / 5 TN / 1 FN is a ten-video exploratory result with wide Wilson intervals, not an operational claim.
+6. For an authorized staged doorway recording, use the command in `docs/OBSTRUCTION_VALIDATION.md`; real obstruction accuracy is still incomplete.
+
 ## Real-dataset workflow
 
 1. Start FastAPI and Next.js with the README commands, then open `http://127.0.0.1:3000/datasets`.

@@ -31,6 +31,8 @@ test("real imported video playback and model-result inspection", async ({page}) 
   await expect(page.getByRole("heading", {name:"Fall diagnostic evidence"})).toBeVisible();
   await expect(page.getByRole("button", {name:/Torso orientation/})).toBeVisible();
   await expect(page.getByText(/Improved replay/).first()).toBeVisible();
+  await expect(page.getByText(/Motion fusion/).first()).toBeVisible();
+  await expect(page.getByRole("button", {name:/Landmark bounding-box center Y/})).toBeVisible();
   await page.screenshot({path:"../data/external/validation/reports/fall18-diagnostics-dashboard.png",fullPage:true});
 });
 

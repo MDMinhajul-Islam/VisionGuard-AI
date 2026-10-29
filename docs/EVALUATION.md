@@ -1,5 +1,7 @@
 # Phase 1.5 evaluation
 
+> Phase 2 recording-disjoint results, Wilson intervals, and measured pipeline timings are in [PHASE2_GENERALIZATION.md](PHASE2_GENERALIZATION.md). The independent ten-video sample is reported separately from the original development set.
+
 > A newer real-video baseline is documented in [REAL_VIDEO_EVALUATION.md](REAL_VIDEO_EVALUATION.md) and `evaluations/ur_fall_real_evaluation.json`. The synthetic results below remain useful only as earlier engineering evidence.
 
 The measured diagnostic-profile comparison and corrected temporal denominator are documented in [FALL_DETECTION_IMPROVEMENTS.md](FALL_DETECTION_IMPROVEMENTS.md) and `evaluations/fall_detection_profile_comparison.json`.

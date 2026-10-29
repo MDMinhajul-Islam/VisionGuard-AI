@@ -40,6 +40,7 @@ from app.vision.pose_diagnostics import (
     BASELINE_PROFILE, IMPROVED_PROFILE, diagnostic_series, observation_from_landmarks,
     run_profile, summarize_diagnostics,
 )
+from app.vision.motion_fusion import MOTION_FUSION_PROFILE, detect_motion_fusion_events
 from app.vision.object_detector import object_detector
 from app.vision.obstruction_detection import ObstructionSample, detect_persistent_obstructions
 from app.vision.pose_engine import pose_engine
@@ -632,16 +633,32 @@ def dataset_asset_diagnostics(asset_id: str, db: Session = Depends(get_db)):
         "profiles": {
             "baseline": {"thresholds": BASELINE_PROFILE, "events": run_profile(observations, BASELINE_PROFILE)},
             "improved": {"thresholds": IMPROVED_PROFILE, "events": run_profile(observations, IMPROVED_PROFILE)},
+            "motion_fusion": {"thresholds": MOTION_FUSION_PROFILE, "events": [event.__dict__ for event in detect_motion_fusion_events(observations, **{key: value for key, value in MOTION_FUSION_PROFILE.items() if key != "name"})]},
         },
         "warning": "Plots are measured pose outputs. Source intervals are annotations; profile events are deterministic replay, not calibrated probabilities.",
     }
 
 
+ORIGINAL_UR_BASELINE_IDS = {
+    *(f"fall-{number:02d}" for number in (2, 7, 18, 19, 20, 22, 23, 24, 25, 26)),
+    *(f"adl-{number:02d}" for number in (1, 3, 10, 14, 15, 17, 19, 30, 32, 35)),
+}
+
+
 @app.get("/api/datasets/evaluation")
-def dataset_evaluation(dataset_name: str | None = None, completed_only: bool = True, db: Session = Depends(get_db)):
+def dataset_evaluation(
+    dataset_name: str | None = None,
+    completed_only: bool = True,
+    cohort: str | None = None,
+    db: Session = Depends(get_db),
+):
     statement = select(DatasetAsset).order_by(DatasetAsset.original_recording_id)
     if dataset_name:
         statement = statement.where(DatasetAsset.dataset_name == dataset_name)
+    if cohort == "original_20":
+        statement = statement.where(DatasetAsset.original_recording_id.in_(ORIGINAL_UR_BASELINE_IDS))
+    elif cohort is not None:
+        raise HTTPException(422, "cohort must be original_20 when supplied")
     assets = db.scalars(statement).all()
     rows = []
     predictions = []
@@ -667,7 +684,8 @@ def dataset_evaluation(dataset_name: str | None = None, completed_only: bool = T
             "annotation_status": asset.annotation_status,
         })
     return {
-        "dataset_name": dataset_name or "all imported datasets",
+        "dataset_name": "UR original 20 baseline" if cohort == "original_20" else dataset_name or "all imported datasets",
+        "cohort": cohort or "all",
         "protocol": "video-level: any non-synthetic potential_fall candidate counts as a positive prediction",
         "metrics": evaluate_video_predictions(predictions), "records": rows,
         "event_level_warning": "Event-level metrics require verified temporal annotations and are not inferred from video-level labels.",

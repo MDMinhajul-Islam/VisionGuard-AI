@@ -121,8 +121,8 @@ def source_intervals(sequence: str, timestamps: dict[int, float], labels: dict[s
     }]
 
 
-def prepare_ur() -> Path:
-    download_manifest_path = UR_ROOT / "download_manifest.json"
+def prepare_ur(download_manifest_path: Path | None = None, output_name: str = "ur-balanced-20.json") -> Path:
+    download_manifest_path = download_manifest_path or UR_ROOT / "download_manifest.json"
     download_manifest = json.loads(download_manifest_path.read_text(encoding="utf-8"))
     raw_root, prepared_root = UR_ROOT / "raw", UR_ROOT / "prepared"
     annotations_root = DATA_ROOT / "validation" / "annotations"
@@ -186,9 +186,14 @@ def prepare_ur() -> Path:
         dataset_name="UR Fall Detection balanced RGB subset", seed=download_manifest["seed"],
         created_at=created_at, records=records,
     )
-    manifest_path = DATA_ROOT / "validation" / "manifests" / "ur-balanced-20.json"
+    manifest_path = DATA_ROOT / "validation" / "manifests" / output_name
     write_json(manifest_path, manifest.model_dump(mode="json"))
-    write_json(annotations_root / "ur-source-temporal-labels.json", {
+    annotation_name = (
+        "ur-source-temporal-labels.json"
+        if output_name == "ur-balanced-20.json"
+        else f"{Path(output_name).stem}-source-temporal-labels.json"
+    )
+    write_json(annotations_root / annotation_name, {
         "schema_version": "1.0", "created_at": created_at, "annotations": source_annotations,
     })
     write_json(reports_root / "ur-conversion-report.json", {
@@ -201,9 +206,11 @@ def prepare_ur() -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Safely extract and convert downloaded research videos.")
     parser.add_argument("--dataset", choices=["ur"], default="ur")
+    parser.add_argument("--download-manifest", type=Path)
+    parser.add_argument("--output-name", default="ur-balanced-20.json")
     args = parser.parse_args()
     if args.dataset == "ur":
-        prepare_ur()
+        prepare_ur(args.download_manifest, args.output_name)
     return 0
 
 

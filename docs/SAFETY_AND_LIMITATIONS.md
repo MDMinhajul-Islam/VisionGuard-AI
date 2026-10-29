@@ -1,5 +1,9 @@
 # Safety, privacy, and limitations
 
+## Phase 2 validation boundary
+
+The recording-disjoint Phase 2 sample has only five fall and five non-fall recordings from one academic dataset. Participant independence could not be verified, and confidence intervals are wide. Motion fusion is therefore an explainable experiment, not a validated safety system. Physical exit-obstruction accuracy remains unmeasured because no authorized staged recording was available; deterministic geometry tests cannot replace real-video validation.
+
 VisionGuard AI is an offline portfolio/research prototype for synthetic, staged, user-owned, or otherwise authorized recorded footage. It is not certified, safety-critical, or appropriate for public deployment.
 
 ## Prohibited scope

@@ -125,4 +125,5 @@ def test_dataset_asset_registration_is_idempotent_and_video_metrics_are_real_pre
         result = client.get("/api/datasets/evaluation", params={"dataset_name": "Research Set", "completed_only": "false"}).json()
         assert result["metrics"]["true_positives"] == 1
         assert result["records"][0]["candidate_timestamps"] == [1.0]
+        assert client.get("/api/datasets/evaluation", params={"cohort": "unknown"}).status_code == 422
 
