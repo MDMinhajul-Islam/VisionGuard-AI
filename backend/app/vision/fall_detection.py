@@ -89,6 +89,7 @@ class FallStateMachine:
         self, transition_window=1.5, min_vertical_drop=0.12,
         horizontal_persistence=0.6, recovery_seconds=0.5,
         confidence_threshold=0.5, max_pose_gap=0.6,
+        min_horizontal_aspect=0.0,
     ):
         self.transition_window = transition_window
         self.min_vertical_drop = min_vertical_drop
@@ -96,6 +97,7 @@ class FallStateMachine:
         self.recovery_seconds = recovery_seconds
         self.confidence_threshold = confidence_threshold
         self.max_pose_gap = max_pose_gap
+        self.min_horizontal_aspect = min_horizontal_aspect
         self.history: deque[PoseObservation] = deque()
         self.reset_candidate()
         self.last_valid_timestamp: float | None = None
@@ -154,6 +156,7 @@ class FallStateMachine:
                     "upright_to_horizontal": True,
                     "vertical_drop_met": self.transition_evidence.get("vertical_drop", 0) >= self.min_vertical_drop,
                     "horizontal_persistence_met": persistence + 1e-6 >= self.horizontal_persistence,
+                    "horizontal_shape_met": self.transition_evidence.get("horizontal_aspect_ratio", 0) + 1e-6 >= self.min_horizontal_aspect,
                     "pose_continuity_met": True,
                 }
                 if self.active_event:

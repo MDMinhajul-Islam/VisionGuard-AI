@@ -19,11 +19,11 @@ Run date: 2026-10-29. This is an exploratory baseline on a fixed 20-video UR Fal
 | Video-level precision | 0.800 |
 | Video-level recall | 0.400 |
 | Video-level F1 | 0.533 |
-| Source-aligned temporal TP / FP / FN | 4 / 0 / 6 |
-| Source-aligned temporal precision / recall / F1 | 1.000 / 0.400 / 0.571 |
+| Source-aligned temporal TP / FP / FN | 4 / 1 / 6 |
+| Source-aligned temporal precision / recall / F1 | 0.800 / 0.400 / 0.533 |
 | Mean matched onset delay / absolute error | 0.538 s / 0.538 s |
 
-Temporal scores cover only the ten fall videos with mapped source intervals. They must not be read as a complete event-level false-alert rate across ADLs, and the source intervals are depth-posture-derived rather than independent RGB event annotations.
+Temporal matching uses mapped positive intervals for ten fall videos and retains unmatched predictions from ten video-level non-fall controls as false positives. The positive intervals are depth-posture-derived rather than independent human RGB event annotations.
 
 True positives were `fall-02`, `fall-07`, `fall-22`, and `fall-24`. False negatives were `fall-18`, `fall-19`, `fall-20`, `fall-23`, `fall-25`, and `fall-26`. The only video-level false positive was `adl-30`.
 

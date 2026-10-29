@@ -27,7 +27,7 @@ def main() -> int:
         assets = client.get("/api/datasets/assets", params={"dataset_name": args.dataset}).json()
         temporal_results = []
         for item in assets:
-            if item["evaluation_label"] != "fall" or item["annotation_status"] != "source_frame_labels":
+            if item["evaluation_label"] == "fall" and item["annotation_status"] != "source_frame_labels":
                 continue
             temporal = client.post(f"/api/videos/{item['video_id']}/evaluate", json={
                 "event_type": "potential_fall", "split": "evaluation",
@@ -43,14 +43,14 @@ def main() -> int:
         event_f1 = 2 * event_precision * event_recall / (event_precision + event_recall) if event_precision is not None and event_recall is not None and event_precision + event_recall else None
         matches = [match for item in temporal_results for match in item["matches"]]
         report["temporal_evaluation"] = {
-            "scope": "UR source cam0 depth posture label 0 mapped to RGB with official synchronization timestamps",
+            "scope": "All predictions from ten annotated falls and ten video-level non-fall negative controls. Positive intervals use UR cam0 depth posture label 0 mapped to RGB synchronization timestamps.",
             "videos_with_source_intervals": len(temporal_results),
             "true_positives": event_tp, "false_positives": event_fp, "false_negatives": event_fn,
             "precision": event_precision, "recall": event_recall, "f1": event_f1,
             "mean_detection_delay_seconds": sum(item["detection_delay_seconds"] for item in matches) / len(matches) if matches else None,
             "mean_timestamp_localization_error_seconds": sum(item["timestamp_localization_error_seconds"] for item in matches) / len(matches) if matches else None,
             "matching": "greedy one-to-one; temporal IoU >= 0.3 OR onset error <= 1.0 second",
-            "limitation": "Transition labels originate from synchronized depth-frame posture features, not independent RGB human event-onset annotation.",
+            "limitation": "Positive transition labels originate from synchronized depth-frame posture features, not independent RGB human event-onset annotation. Non-fall videos provide video-level negative controls but no temporal intervals.",
             "per_video": temporal_results,
         }
         metric_rows = [row["processing_metrics"] for row in report["records"]]

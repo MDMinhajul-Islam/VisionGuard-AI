@@ -25,8 +25,13 @@ test("real imported video playback and model-result inspection", async ({page}) 
   const video = page.locator("video");
   await expect(video).toBeVisible();
   await expect.poll(()=>video.evaluate(element=>(element as HTMLVideoElement).readyState)).toBeGreaterThan(0);
-  await expect(page.getByText("Potential fall candidate", {exact:true})).toBeVisible();
+  await expect(page.getByText("Candidate", {exact:true}).first()).toBeVisible();
   await expect(page.getByText("source frame labels", {exact:true}).last()).toBeVisible();
+  await page.getByRole("button", {name:"fall-18"}).click();
+  await expect(page.getByRole("heading", {name:"Fall diagnostic evidence"})).toBeVisible();
+  await expect(page.getByRole("button", {name:/Torso orientation/})).toBeVisible();
+  await expect(page.getByText(/Improved replay/).first()).toBeVisible();
+  await page.screenshot({path:"../data/external/validation/reports/fall18-diagnostics-dashboard.png",fullPage:true});
 });
 
 test("dataset evaluation workspace separates provenance and predictions", async ({page}) => {
@@ -34,8 +39,8 @@ test("dataset evaluation workspace separates provenance and predictions", async 
   await page.goto("/datasets");
   expect((await evaluationResponse).ok()).toBeTruthy();
   await expect(page.getByRole("heading", {name:"Dataset evaluation"})).toBeVisible();
-  await expect(page.getByText("Video-level confusion matrix")).toBeVisible();
-  await expect(page.getByText(/Video labels are not treated as temporal annotations/)).toBeVisible();
+  await expect(page.getByRole("heading", {name:"Preserved baseline"})).toBeVisible();
+  await expect(page.getByText(/Event-level metrics require verified temporal annotations/)).toBeVisible();
   await expect(page.getByText("80.0%", {exact:true})).toBeVisible();
   await expect(page.getByText("40.0%", {exact:true})).toBeVisible();
   await expect(page.getByText("53.3%", {exact:true})).toBeVisible();

@@ -36,6 +36,10 @@ from app.evaluation.video_level import VideoPrediction, evaluate_video_predictio
 from app.services.exporter import export_clip
 from app.services.video_io import SUPPORTED_EXTENSIONS, find_binary, probe_video, render_overlay, safe_within
 from app.vision.clip_engine import clip_engine
+from app.vision.pose_diagnostics import (
+    BASELINE_PROFILE, IMPROVED_PROFILE, diagnostic_series, observation_from_landmarks,
+    run_profile, summarize_diagnostics,
+)
 from app.vision.object_detector import object_detector
 from app.vision.obstruction_detection import ObstructionSample, detect_persistent_obstructions
 from app.vision.pose_engine import pose_engine
@@ -584,6 +588,52 @@ def dataset_summary(db: Session = Depends(get_db)):
             "source_url": next(asset.source_url for asset in assets if asset.dataset_name == name),
         } for name in names],
         "total_videos": len(assets),
+    }
+
+
+@app.get("/api/datasets/assets/{asset_id}/diagnostics")
+def dataset_asset_diagnostics(asset_id: str, db: Session = Depends(get_db)):
+    dataset_asset = db.get(DatasetAsset, asset_id)
+    if not dataset_asset:
+        raise HTTPException(404, "dataset asset not found")
+    rows = db.scalars(select(PoseEvidence).where(
+        PoseEvidence.video_id == dataset_asset.video_id
+    ).order_by(PoseEvidence.timestamp_seconds)).all()
+    observations = [
+        observation_from_landmarks(row.timestamp_seconds, row.frame_id, json.loads(row.landmarks_json))
+        for row in rows
+    ]
+    series = diagnostic_series(observations)
+    for point in series:
+        point["image_url"] = f"/api/frames/{point['frame_id']}/image"
+        point["overlay_url"] = f"/api/frames/{point['frame_id']}/overlay"
+    annotations = db.scalars(select(ValidationAnnotation).where(
+        ValidationAnnotation.video_id == dataset_asset.video_id,
+        ValidationAnnotation.event_type == "potential_fall",
+    ).order_by(ValidationAnnotation.start_seconds)).all()
+    stored = db.scalars(select(CandidateEvent).where(
+        CandidateEvent.video_id == dataset_asset.video_id,
+        CandidateEvent.event_type == "potential_fall",
+        CandidateEvent.synthetic_fixture.is_(False),
+    ).order_by(CandidateEvent.start_seconds)).all()
+    return {
+        "asset_id": dataset_asset.id,
+        "record_id": dataset_asset.original_recording_id,
+        "video_id": dataset_asset.video_id,
+        "ground_truth": dataset_asset.evaluation_label,
+        "annotation_status": dataset_asset.annotation_status,
+        "summary": summarize_diagnostics(series),
+        "timeline": series,
+        "source_intervals": [{
+            "id": item.id, "start_seconds": item.start_seconds, "end_seconds": item.end_seconds,
+            "label": item.ground_truth_label, "source": item.annotation_source,
+        } for item in annotations],
+        "stored_baseline_events": [event_dict(item) for item in stored],
+        "profiles": {
+            "baseline": {"thresholds": BASELINE_PROFILE, "events": run_profile(observations, BASELINE_PROFILE)},
+            "improved": {"thresholds": IMPROVED_PROFILE, "events": run_profile(observations, IMPROVED_PROFILE)},
+        },
+        "warning": "Plots are measured pose outputs. Source intervals are annotations; profile events are deterministic replay, not calibrated probabilities.",
     }
 
 

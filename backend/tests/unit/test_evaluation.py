@@ -51,3 +51,15 @@ def test_semantic_ranking_metrics_use_timestamp_intervals():
     result = evaluate_ranked_timestamps([3.0, 7.0, 5.0], [(2.0, 4.0)], 3)
     assert result["precision_at_k"] == pytest.approx(1 / 3)
     assert result["recall_at_k"] == 1.0
+
+
+def test_temporal_matching_never_crosses_record_scopes_and_keeps_negative_false_alarm():
+    predictions = [
+        IntervalEvent("p-fall", 1, 2, "potential_fall:fall-01"),
+        IntervalEvent("p-adl", 1, 2, "potential_fall:adl-01"),
+    ]
+    truth = [IntervalEvent("g-fall", 1, 2, "potential_fall:fall-01")]
+    result = evaluate_events(predictions, truth)
+    assert result["true_positives"] == 1
+    assert result["false_positives"] == 1
+    assert result["false_positive_examples"][0]["id"] == "p-adl"

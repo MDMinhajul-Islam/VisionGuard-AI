@@ -37,7 +37,7 @@ flowchart LR
   N --> E[Human decision + clip export]
 ```
 
-See [Architecture](docs/ARCHITECTURE.md), [Models](docs/MODELS.md), [Evaluation](docs/EVALUATION.md), [Real datasets](docs/REAL_DATASETS.md), [Real-video evaluation](docs/REAL_VIDEO_EVALUATION.md), [Safety](docs/SAFETY_AND_LIMITATIONS.md), and the [2–3 minute demo](docs/DEMO_GUIDE.md).
+See [Architecture](docs/ARCHITECTURE.md), [Models](docs/MODELS.md), [Evaluation](docs/EVALUATION.md), [Real datasets](docs/REAL_DATASETS.md), [Fall diagnostics](docs/FALL_DETECTION_DIAGNOSTICS.md), [Fall improvements](docs/FALL_DETECTION_IMPROVEMENTS.md), [Safety](docs/SAFETY_AND_LIMITATIONS.md), and the [2–3 minute demo](docs/DEMO_GUIDE.md).
 
 ![Event evidence viewer](docs/images/phase1-5-evidence-viewer.png)
 
@@ -114,6 +114,7 @@ Acquire, prepare, import, process, and evaluate the fixed research subset:
 .\.venv\Scripts\python .\scripts\prepare_research_videos.py --dataset ur
 .\.venv\Scripts\python .\scripts\import_validation_videos.py .\data\external\validation\manifests\ur-balanced-20.json --api http://127.0.0.1:8000 --process
 .\.venv\Scripts\python .\scripts\evaluate_real_falls.py --api http://127.0.0.1:8000
+.\.venv\Scripts\python .\scripts\evaluate_fall_profiles.py
 ```
 
 Ground-truth manifests can be validated/imported without changing application code:

@@ -10,10 +10,10 @@
     "false_negative_ids": ["fall-18", "fall-19", "fall-20", "fall-23", "fall-25", "fall-26"]
   },
   "temporal_source_aligned": {
-    "scope": "ten fall videos with UR cam0 depth-posture label 0 mapped to RGB synchronization timestamps",
+    "scope": "ten annotated fall videos plus ten video-level non-fall negative controls; UR cam0 depth-posture label 0 mapped to RGB synchronization timestamps",
     "matching": "greedy one-to-one; IoU >= 0.3 or onset error <= 1.0 second",
-    "true_positives": 4, "false_positives": 0, "false_negatives": 6,
-    "precision": 1.0, "recall": 0.4, "f1": 0.5714285714,
+    "true_positives": 4, "false_positives": 1, "false_negatives": 6,
+    "precision": 0.8, "recall": 0.4, "f1": 0.5333333333,
     "mean_detection_delay_seconds": 0.5375,
     "mean_timestamp_localization_error_seconds": 0.5375
   },

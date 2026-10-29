@@ -1,0 +1,334 @@
+{
+  "baseline": {
+    "cached_rule_evaluation_seconds": 0.015308300000015151,
+    "calibration": {
+      "f1": 0.3333333333333333,
+      "false_negative_ids": [
+        "fall-18",
+        "fall-19",
+        "fall-20"
+      ],
+      "false_negatives": 3,
+      "false_positive_ids": [
+        "adl-30"
+      ],
+      "false_positives": 1,
+      "precision": 0.5,
+      "recall": 0.25,
+      "true_negatives": 3,
+      "true_positives": 1,
+      "undefined_metrics": [],
+      "videos": 8
+    },
+    "held_out_non_calibration": {
+      "f1": 0.6666666666666666,
+      "false_negative_ids": [
+        "fall-23",
+        "fall-25",
+        "fall-26"
+      ],
+      "false_negatives": 3,
+      "false_positive_ids": [],
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 0.5,
+      "true_negatives": 6,
+      "true_positives": 3,
+      "undefined_metrics": [],
+      "videos": 12
+    },
+    "overall": {
+      "f1": 0.5333333333333333,
+      "false_negative_ids": [
+        "fall-18",
+        "fall-19",
+        "fall-20",
+        "fall-23",
+        "fall-25",
+        "fall-26"
+      ],
+      "false_negatives": 6,
+      "false_positive_ids": [
+        "adl-30"
+      ],
+      "false_positives": 1,
+      "precision": 0.8,
+      "recall": 0.4,
+      "true_negatives": 9,
+      "true_positives": 4,
+      "undefined_metrics": [],
+      "videos": 20
+    },
+    "profile": {
+      "confidence_threshold": 0.5,
+      "event_merge_interval": 1.0,
+      "horizontal_persistence": 0.6,
+      "max_pose_gap": 0.6,
+      "min_horizontal_aspect": 0.0,
+      "min_vertical_drop": 0.12,
+      "name": "real-dataset-baseline",
+      "smoothing_window": 3,
+      "transition_window": 1.5
+    },
+    "temporal_hybrid": {
+      "f1": 0.5333333333333333,
+      "false_negative_examples": [
+        {
+          "end_seconds": 1.501,
+          "event_type": "potential_fall:fall-18",
+          "id": "fall-18:truth:0",
+          "start_seconds": 0.5
+        },
+        {
+          "end_seconds": 1.8010000000000002,
+          "event_type": "potential_fall:fall-19",
+          "id": "fall-19:truth:0",
+          "start_seconds": 0.8
+        },
+        {
+          "end_seconds": 1.5670000000000002,
+          "event_type": "potential_fall:fall-20",
+          "id": "fall-20:truth:0",
+          "start_seconds": 0.567
+        },
+        {
+          "end_seconds": 1.8679999999999999,
+          "event_type": "potential_fall:fall-23",
+          "id": "fall-23:truth:0",
+          "start_seconds": 0.867
+        },
+        {
+          "end_seconds": 2.468,
+          "event_type": "potential_fall:fall-25",
+          "id": "fall-25:truth:0",
+          "start_seconds": 1.468
+        },
+        {
+          "end_seconds": 1.4010000000000002,
+          "event_type": "potential_fall:fall-26",
+          "id": "fall-26:truth:0",
+          "start_seconds": 0.4
+        }
+      ],
+      "false_negatives": 6,
+      "false_positive_examples": [
+        {
+          "end_seconds": 9.32,
+          "event_type": "potential_fall:adl-30",
+          "id": "adl-30:prediction:0",
+          "start_seconds": 5.72
+        }
+      ],
+      "false_positives": 1,
+      "matches": [
+        {
+          "detection_delay_seconds": 0.353,
+          "ground_truth_id": "fall-24:truth:0",
+          "prediction_id": "fall-24:prediction:0",
+          "temporal_iou": 0.3962033067973056,
+          "timestamp_localization_error_seconds": 0.353
+        },
+        {
+          "detection_delay_seconds": 0.5,
+          "ground_truth_id": "fall-22:truth:0",
+          "prediction_id": "fall-22:prediction:0",
+          "temporal_iou": 0.2747252747252748,
+          "timestamp_localization_error_seconds": 0.5
+        },
+        {
+          "detection_delay_seconds": 0.4990000000000001,
+          "ground_truth_id": "fall-02:truth:0",
+          "prediction_id": "fall-02:prediction:0",
+          "temporal_iou": 0.20752377015295573,
+          "timestamp_localization_error_seconds": 0.4990000000000001
+        },
+        {
+          "detection_delay_seconds": 0.798,
+          "ground_truth_id": "fall-07:truth:0",
+          "prediction_id": "fall-07:prediction:0",
+          "temporal_iou": 0.0923566878980893,
+          "timestamp_localization_error_seconds": 0.798
+        }
+      ],
+      "mean_detection_delay_seconds": 0.5375000000000001,
+      "mean_timestamp_localization_error_seconds": 0.5375000000000001,
+      "precision": 0.8,
+      "protocol": {
+        "matching": "greedy one-to-one",
+        "onset_tolerance_seconds": 1.0,
+        "temporal_iou_threshold": 0.3
+      },
+      "recall": 0.4,
+      "true_positives": 4,
+      "undefined_metrics": []
+    }
+  },
+  "baseline_preserved": true,
+  "calibration_ids": [
+    "adl-01",
+    "adl-03",
+    "adl-30",
+    "adl-32",
+    "fall-02",
+    "fall-18",
+    "fall-19",
+    "fall-20"
+  ],
+  "dataset": "UR Fall Detection balanced 20-video subset",
+  "generated_at": "2026-10-29T05:31:32.795515+00:00",
+  "held_out_warning": "All videos were inspected diagnostically. The non-calibration split is useful for regression only and is not an unbiased generalization estimate.",
+  "improved": {
+    "cached_rule_evaluation_seconds": 0.014976699999806442,
+    "calibration": {
+      "f1": 0.6666666666666666,
+      "false_negative_ids": [
+        "fall-19",
+        "fall-20"
+      ],
+      "false_negatives": 2,
+      "false_positive_ids": [],
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 0.5,
+      "true_negatives": 4,
+      "true_positives": 2,
+      "undefined_metrics": [],
+      "videos": 8
+    },
+    "held_out_non_calibration": {
+      "f1": 0.6666666666666666,
+      "false_negative_ids": [
+        "fall-23",
+        "fall-25",
+        "fall-26"
+      ],
+      "false_negatives": 3,
+      "false_positive_ids": [],
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 0.5,
+      "true_negatives": 6,
+      "true_positives": 3,
+      "undefined_metrics": [],
+      "videos": 12
+    },
+    "overall": {
+      "f1": 0.6666666666666666,
+      "false_negative_ids": [
+        "fall-19",
+        "fall-20",
+        "fall-23",
+        "fall-25",
+        "fall-26"
+      ],
+      "false_negatives": 5,
+      "false_positive_ids": [],
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 0.5,
+      "true_negatives": 10,
+      "true_positives": 5,
+      "undefined_metrics": [],
+      "videos": 20
+    },
+    "profile": {
+      "confidence_threshold": 0.5,
+      "event_merge_interval": 1.0,
+      "horizontal_persistence": 0.08,
+      "max_pose_gap": 0.6,
+      "min_horizontal_aspect": 0.8,
+      "min_vertical_drop": 0.12,
+      "name": "diagnostic-shape-gated-v1",
+      "smoothing_window": 3,
+      "transition_window": 1.5
+    },
+    "temporal_hybrid": {
+      "f1": 0.6666666666666666,
+      "false_negative_examples": [
+        {
+          "end_seconds": 1.8010000000000002,
+          "event_type": "potential_fall:fall-19",
+          "id": "fall-19:truth:0",
+          "start_seconds": 0.8
+        },
+        {
+          "end_seconds": 1.5670000000000002,
+          "event_type": "potential_fall:fall-20",
+          "id": "fall-20:truth:0",
+          "start_seconds": 0.567
+        },
+        {
+          "end_seconds": 1.8679999999999999,
+          "event_type": "potential_fall:fall-23",
+          "id": "fall-23:truth:0",
+          "start_seconds": 0.867
+        },
+        {
+          "end_seconds": 2.468,
+          "event_type": "potential_fall:fall-25",
+          "id": "fall-25:truth:0",
+          "start_seconds": 1.468
+        },
+        {
+          "end_seconds": 1.4010000000000002,
+          "event_type": "potential_fall:fall-26",
+          "id": "fall-26:truth:0",
+          "start_seconds": 0.4
+        }
+      ],
+      "false_negatives": 5,
+      "false_positive_examples": [],
+      "false_positives": 0,
+      "matches": [
+        {
+          "detection_delay_seconds": 0.21999999999999997,
+          "ground_truth_id": "fall-18:truth:0",
+          "prediction_id": "fall-18:prediction:0",
+          "temporal_iou": 0.7099999999999999,
+          "timestamp_localization_error_seconds": 0.21999999999999997
+        },
+        {
+          "detection_delay_seconds": 0.353,
+          "ground_truth_id": "fall-24:truth:0",
+          "prediction_id": "fall-24:prediction:0",
+          "temporal_iou": 0.3962033067973056,
+          "timestamp_localization_error_seconds": 0.353
+        },
+        {
+          "detection_delay_seconds": 0.5,
+          "ground_truth_id": "fall-22:truth:0",
+          "prediction_id": "fall-22:prediction:0",
+          "temporal_iou": 0.2747252747252748,
+          "timestamp_localization_error_seconds": 0.5
+        },
+        {
+          "detection_delay_seconds": 0.4990000000000001,
+          "ground_truth_id": "fall-02:truth:0",
+          "prediction_id": "fall-02:prediction:0",
+          "temporal_iou": 0.20752377015295573,
+          "timestamp_localization_error_seconds": 0.4990000000000001
+        },
+        {
+          "detection_delay_seconds": 0.798,
+          "ground_truth_id": "fall-07:truth:0",
+          "prediction_id": "fall-07:prediction:0",
+          "temporal_iou": 0.0923566878980893,
+          "timestamp_localization_error_seconds": 0.798
+        }
+      ],
+      "mean_detection_delay_seconds": 0.47400000000000003,
+      "mean_timestamp_localization_error_seconds": 0.47400000000000003,
+      "precision": 1.0,
+      "protocol": {
+        "matching": "greedy one-to-one",
+        "onset_tolerance_seconds": 1.0,
+        "temporal_iou_threshold": 0.3
+      },
+      "recall": 0.5,
+      "true_positives": 5,
+      "undefined_metrics": []
+    }
+  },
+  "participant_split_status": "UR sequence files expose no participant/session identifier; participant-disjoint splitting cannot be verified.",
+  "temporal_scope": "All predicted events from 20 videos are included; positive intervals exist for ten falls and non-fall video labels act as negative controls."
+}

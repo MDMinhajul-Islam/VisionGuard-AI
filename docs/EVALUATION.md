@@ -2,6 +2,8 @@
 
 > A newer real-video baseline is documented in [REAL_VIDEO_EVALUATION.md](REAL_VIDEO_EVALUATION.md) and `evaluations/ur_fall_real_evaluation.json`. The synthetic results below remain useful only as earlier engineering evidence.
 
+The measured diagnostic-profile comparison and corrected temporal denominator are documented in [FALL_DETECTION_IMPROVEMENTS.md](FALL_DETECTION_IMPROVEMENTS.md) and `evaluations/fall_detection_profile_comparison.json`.
+
 Run date: 2026-10-28. Machine: Windows, Python 3.10.9, PyTorch 2.11.0+cu128, RTX 3050 Ti Laptop GPU (4 GiB), CUDA available. Raw results are in [`evaluations/latest_results.json`](../evaluations/latest_results.json) and [`evaluations/phase1_5_synthetic_fall.json`](../evaluations/phase1_5_synthetic_fall.json).
 
 ## Verification

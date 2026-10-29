@@ -48,6 +48,22 @@ export type DatasetEvaluation = {
   records:{asset_id:string;record_id:string;video_id:string;ground_truth:string;predicted_fall:boolean;event_count:number;candidate_timestamps:number[];processing_status:string;processing_metrics:Record<string,unknown>;duration_seconds:number|null;annotation_status:string}[];
 };
 
+export type PoseDiagnosticPoint = {
+  timestamp_seconds:number;state:string;torso_angle_degrees:number;aspect_ratio:number;
+  hip_y:number|null;vertical_drop_from_recent_upright:number|null;visibility:number;
+  missing_landmarks:number[];missing_lower_body:number[];frame_id:string;image_url:string;overlay_url:string;
+};
+
+export type DatasetDiagnostic = {
+  asset_id:string;record_id:string;video_id:string;ground_truth:string;annotation_status:string;
+  summary:{pose_samples:number;valid_pose_samples:number;unknown_pose_samples:number;pose_availability:number;max_valid_gap_seconds:number;max_torso_angle_degrees:number;max_aspect_ratio:number;max_vertical_drop_from_recent_upright:number|null;state_counts:Record<string,number>};
+  timeline:PoseDiagnosticPoint[];
+  source_intervals:{id:string;start_seconds:number;end_seconds:number;label:string;source:string}[];
+  stored_baseline_events:EventCandidate[];
+  profiles:Record<"baseline"|"improved",{thresholds:Record<string,number|string>;events:{start_seconds:number;end_seconds:number;confidence_signal:number;evidence:Record<string,unknown>}[]}>;
+  warning:string;
+};
+
 export function asset(path?: string | null) {
   if (!path) return "";
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
