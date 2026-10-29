@@ -1,0 +1,74 @@
+{
+  "approved_by": null,
+  "checkpoint_identity": "models/benchmark/rfdetr/rf-detr-nano.pth",
+  "checkpoint_sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+  "configuration": {
+    "input_canvas": "640x640 letterbox",
+    "threshold": 0.45
+  },
+  "created_at": "2026-10-29T07:12:30.995833+00:00",
+  "dataset_id": "ur-fall-local-frame-sample-sprint3",
+  "dataset_license": "CC BY-NC-SA 4.0; non-commercial academic use",
+  "dataset_source": "University of Rzeszow UR Fall Detection Dataset",
+  "evaluation_protocol": {
+    "accuracy_metrics": "not calculated; no bounding-box ground truth",
+    "input_canvas": "640x640 letterbox",
+    "source_image_sha256": [
+      "5e8f1a023e82ed1e48221e9b46bb196180e23beaf4e509ffb73f854de66fc153",
+      "f07da411e1f4e73d74a42a7279f335dcbc807f7f12462ef53356318c73b88089",
+      "1113eb2e5fcd4ae331e5da8163b80b9a6df5265624b6b82015264d0144d38fcf",
+      "e6645c3f2fd42cf418e2d7133c8526547b9dd2fbdd2e1276b9f14f1017220b2f",
+      "730aa833fa4ee601a3e26902d8f4b075d0e8126c46277bfd46d93cb976caf76d"
+    ],
+    "threshold": 0.45
+  },
+  "experiment_id": "sprint3-rf-detr-nano",
+  "git_commit": "5c97ed25be6782fa942d5471c23a622a8ed1c616",
+  "hardware": {
+    "cuda": "12.8",
+    "cuda_available": true,
+    "gpu": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+    "platform": "Windows-10-10.0.26300-SP0",
+    "python": "3.10.9",
+    "torch": "2.11.0+cu128"
+  },
+  "manifest_version": "five-frame-sha256-set-v1",
+  "measured_results": {
+    "checkpoint_sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+    "detection_counts": [
+      5,
+      5,
+      4,
+      2,
+      4,
+      5,
+      5,
+      4,
+      2,
+      4
+    ],
+    "end_to_end_ms": {
+      "mean": 32.332120000137365,
+      "p50": 23.756200000207173,
+      "p95": 72.94438000126311
+    },
+    "inference_ms": {
+      "mean": 32.14678999993339,
+      "p50": 23.563900000226567,
+      "p95": 72.74743499956449
+    },
+    "load_seconds": 6.295012999999017,
+    "measured_iterations": 10,
+    "peak_gpu_memory_mib": 178.49560546875,
+    "process_cpu_percent_normalized": 49.93339465013221,
+    "warmup_iterations": 2
+  },
+  "model_architecture": "RF-DETR Nano",
+  "model_license": "Apache-2.0 core model",
+  "registry": "research",
+  "runtime_versions": {
+    "cuda": "12.8",
+    "python": "3.10.9",
+    "torch": "2.11.0+cu128"
+  }
+}

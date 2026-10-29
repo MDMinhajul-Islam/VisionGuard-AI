@@ -1,0 +1,74 @@
+{
+  "approved_by": null,
+  "checkpoint_identity": "models/benchmark/yolo26n.pt",
+  "checkpoint_sha256": "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef",
+  "configuration": {
+    "input_canvas": "640x640 letterbox",
+    "threshold": 0.45
+  },
+  "created_at": "2026-10-29T07:12:30.994832+00:00",
+  "dataset_id": "ur-fall-local-frame-sample-sprint3",
+  "dataset_license": "CC BY-NC-SA 4.0; non-commercial academic use",
+  "dataset_source": "University of Rzeszow UR Fall Detection Dataset",
+  "evaluation_protocol": {
+    "accuracy_metrics": "not calculated; no bounding-box ground truth",
+    "input_canvas": "640x640 letterbox",
+    "source_image_sha256": [
+      "5e8f1a023e82ed1e48221e9b46bb196180e23beaf4e509ffb73f854de66fc153",
+      "f07da411e1f4e73d74a42a7279f335dcbc807f7f12462ef53356318c73b88089",
+      "1113eb2e5fcd4ae331e5da8163b80b9a6df5265624b6b82015264d0144d38fcf",
+      "e6645c3f2fd42cf418e2d7133c8526547b9dd2fbdd2e1276b9f14f1017220b2f",
+      "730aa833fa4ee601a3e26902d8f4b075d0e8126c46277bfd46d93cb976caf76d"
+    ],
+    "threshold": 0.45
+  },
+  "experiment_id": "sprint3-ultralytics-yolo26n",
+  "git_commit": "5c97ed25be6782fa942d5471c23a622a8ed1c616",
+  "hardware": {
+    "cuda": "12.8",
+    "cuda_available": true,
+    "gpu": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+    "platform": "Windows-10-10.0.26300-SP0",
+    "python": "3.10.9",
+    "torch": "2.11.0+cu128"
+  },
+  "manifest_version": "five-frame-sha256-set-v1",
+  "measured_results": {
+    "checkpoint_sha256": "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef",
+    "detection_counts": [
+      3,
+      2,
+      3,
+      1,
+      2,
+      3,
+      2,
+      3,
+      1,
+      2
+    ],
+    "end_to_end_ms": {
+      "mean": 14.555949999885343,
+      "p50": 14.502149999316316,
+      "p95": 15.196475000539067
+    },
+    "inference_ms": {
+      "mean": 14.264150000053633,
+      "p50": 14.184100000420585,
+      "p95": 14.955349999763712
+    },
+    "load_seconds": 0.22632049999992887,
+    "measured_iterations": 10,
+    "peak_gpu_memory_mib": 65.2646484375,
+    "process_cpu_percent_normalized": 9.838418113966133,
+    "warmup_iterations": 2
+  },
+  "model_architecture": "YOLO26n",
+  "model_license": "AGPL-3.0 or Ultralytics Enterprise; benchmark-only without commercial license",
+  "registry": "research",
+  "runtime_versions": {
+    "cuda": "12.8",
+    "python": "3.10.9",
+    "torch": "2.11.0+cu128"
+  }
+}

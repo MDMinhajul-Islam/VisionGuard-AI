@@ -16,9 +16,9 @@ Raw results: `evaluations/detector_benchmark.json`.
 
 | Model | Load s | Inference mean / p50 / p95 ms | End-to-end mean / p50 / p95 ms | Peak GPU MiB | Status |
 |---|---:|---:|---:|---:|---|
-| Torchvision SSDlite320 MobileNetV3 | 0.30 | 51.05 / 49.67 / 56.71 | 54.22 / 52.81 / 60.17 | 38.30 | commercial clearance pending |
-| Ultralytics YOLO26n | 0.24 | 17.21 / 16.68 / 21.51 | 17.59 / 16.98 / 22.00 | 65.26 | benchmark-only licensing |
-| RF-DETR Nano 1.11.2 | 5.82 | 38.85 / 37.66 / 46.37 | 39.52 / 38.22 / 47.32 | 178.50 | Apache core candidate |
+| Torchvision SSDlite320 MobileNetV3 | 0.46 | 49.66 / 46.23 / 61.99 | 52.81 / 49.37 / 65.33 | 38.30 | commercial clearance pending |
+| Ultralytics YOLO26n | 0.23 | 14.26 / 14.18 / 14.96 | 14.56 / 14.50 / 15.20 | 65.26 | benchmark-only licensing |
+| RF-DETR Nano 1.11.2 | 6.30 | 32.15 / 23.56 / 72.75 | 32.33 / 23.76 / 72.94 | 178.50 | Apache core candidate |
 
 Checkpoint SHA-256 values are recorded for all three. RF-DETR emitted an official warning that the eager model was not inference-optimized; results must not be compared with vendor TensorRT figures.
 
