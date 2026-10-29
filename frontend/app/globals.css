@@ -13,6 +13,7 @@ button,input,select,textarea { font:inherit; }
 .nav { display:grid; gap:7px; }
 .nav a { display:flex; align-items:center; gap:11px; color:#a8b3c2; padding:11px 12px; border-radius:9px; font-size:14px; }
 .nav a:hover { background:#182130; color:white; }
+.tenant-picker{display:grid;gap:7px;padding:10px;background:#101722;border:1px solid var(--line);border-radius:10px}.tenant-picker small{color:var(--muted);text-transform:capitalize}.tenant-picker select{min-width:0;width:100%;padding:7px 8px;font-size:12px}
 .sidebar-foot { margin-top:auto; font-size:11px; color:#728095; line-height:1.6; border-top:1px solid var(--line); padding-top:16px; }
 .main { padding:28px 36px 60px; max-width:1500px; width:100%; }
 .page-head { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:22px; }

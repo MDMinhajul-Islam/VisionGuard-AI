@@ -1,7 +1,7 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 export type Video = {
-  id: string; original_filename: string; size_bytes: number; duration_seconds: number | null;
+  id: string; organization_id:string; site_id:string; original_filename: string; size_bytes: number; duration_seconds: number | null;
   width: number | null; height: number | null; fps: number | null; codec: string | null;
   status: string; is_demo: boolean; created_at: string; thumbnail_url: string | null; media_url: string;
 };
@@ -70,7 +70,14 @@ export function asset(path?: string | null) {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {cache: "no-store", credentials: "include", ...init});
+  const headers = new Headers(init?.headers);
+  if (typeof window !== "undefined") {
+    const organizationId = localStorage.getItem("visionguard_org_id");
+    const siteId = localStorage.getItem("visionguard_site_id");
+    if (organizationId) headers.set("X-Organization-ID", organizationId);
+    if (siteId) headers.set("X-Site-ID", siteId);
+  }
+  const response = await fetch(`${API_BASE}${path}`, {cache: "no-store", credentials: "include", ...init, headers});
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {

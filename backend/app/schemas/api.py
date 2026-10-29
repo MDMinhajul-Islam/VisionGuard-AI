@@ -33,8 +33,55 @@ class UserOut(ORMModel):
     created_at: str
 
 
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=12, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class OrganizationCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    workspace_type: Literal["research", "commercial_candidate"] = "commercial_candidate"
+
+
+class SiteCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+
+
+class MembershipCreate(BaseModel):
+    user_id: str = Field(min_length=1, max_length=64)
+    role: Literal["organization_admin", "site_admin", "safety_reviewer", "read_only_auditor"]
+    site_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class OrganizationOut(ORMModel):
+    id: str
+    name: str
+    status: str
+    workspace_type: str
+    created_at: str
+
+
+class SiteOut(ORMModel):
+    id: str
+    organization_id: str
+    name: str
+    status: str
+    created_at: str
+
+
+class MembershipOut(ORMModel):
+    id: str
+    user_id: str
+    organization_id: str
+    role: str
+    status: str
+    created_at: str
+
+
 class VideoOut(ORMModel):
     id: str
+    organization_id: str
+    site_id: str
     original_filename: str
     size_bytes: int
     duration_seconds: float | None

@@ -44,6 +44,8 @@ See [Architecture](docs/ARCHITECTURE.md), [Models](docs/MODELS.md), [Evaluation]
 
 Commercial-foundation documents: [readiness audit](docs/COMMERCIAL_READINESS_AUDIT.md), [detector benchmark](docs/DETECTOR_BENCHMARK.md), [model selection](docs/MODEL_SELECTION.md), [licensing](docs/COMMERCIAL_LICENSING.md), [MLOps](docs/MLOPS_FOUNDATION.md), [production direction](docs/PRODUCTION_ARCHITECTURE.md), and [release gates](docs/RELEASE_GATES.md).
 
+Sprint 4 security documents: [security audit](docs/SPRINT4_SECURITY_AUDIT.md), [tenant isolation](docs/TENANT_ISOLATION.md), [access control](docs/ACCESS_CONTROL.md), [session security](docs/SESSION_SECURITY.md), [audit logging](docs/AUDIT_LOGGING.md), [secure storage](docs/SECURE_STORAGE.md), and [production security gates](docs/PRODUCTION_SECURITY_GATES.md).
+
 ![Event evidence viewer](docs/images/phase1-5-evidence-viewer.png)
 
 ## Windows setup
@@ -73,6 +75,14 @@ Generate a strong local `VISIONGUARD_AUTH_SECRET` in `.env`, then create the fir
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\create_user.py --email admin@example.local --name "Local Administrator" --role admin
 ```
+
+Sprint 4 also requires explicit organization membership. Existing records are preserved in a restricted legacy research workspace and no user receives access automatically. Grant a trusted administrator access explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\manage_tenant.py admin@example.local --role organization_admin
+```
+
+The browser displays only authorized organizations and sites. API authorization is enforced independently of the selected UI context.
 
 No default password is provided. Outside development mode, token creation refuses to proceed without an explicitly configured secret.
 

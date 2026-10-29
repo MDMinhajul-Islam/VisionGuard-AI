@@ -20,6 +20,8 @@ def now_iso() -> str:
 class Video(Base):
     __tablename__ = "videos"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), index=True)
     original_filename: Mapped[str] = mapped_column(String(255))
     stored_filename: Mapped[str] = mapped_column(String(255), unique=True)
     path: Mapped[str] = mapped_column(Text)
@@ -45,7 +47,72 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(Text)
     role: Mapped[str] = mapped_column(String(24), index=True)
     disabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    session_version: Mapped[int] = mapped_column(Integer, default=0)
+    password_changed_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+
+
+class Organization(Base):
+    __tablename__ = "organizations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    name: Mapped[str] = mapped_column(String(160), unique=True)
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    workspace_type: Mapped[str] = mapped_column(String(32), default="commercial_candidate", index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+
+
+class Site(Base):
+    __tablename__ = "sites"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_site_organization_name"),)
+
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+    __table_args__ = (UniqueConstraint("user_id", "organization_id", name="uq_membership_user_org"),)
+
+
+class SiteAccess(Base):
+    __tablename__ = "site_access"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    membership_id: Mapped[str] = mapped_column(ForeignKey("organization_memberships.id", ondelete="CASCADE"), index=True)
+    site_id: Mapped[str] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+    __table_args__ = (UniqueConstraint("membership_id", "site_id", name="uq_site_access_membership_site"),)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    jti: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    session_version: Mapped[int] = mapped_column(Integer)
+    expires_at: Mapped[str] = mapped_column(String(40), index=True)
+    revoked_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    actor_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    organization_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    object_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    object_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    outcome: Mapped[str] = mapped_column(String(24), index=True)
+    request_id: Mapped[str] = mapped_column(String(36), index=True)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[str] = mapped_column(String(40), default=now_iso, index=True)
 
 
 class ProcessingJob(Base):
@@ -131,6 +198,8 @@ class CandidateEvent(Base):
     supporting_frames_json: Mapped[str] = mapped_column(Text, default="[]")
     review_status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
     reviewer_note: Mapped[str] = mapped_column(Text, default="")
+    reviewer_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    reviewed_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
     synthetic_fixture: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
 
@@ -155,6 +224,7 @@ class ExportedClip(Base):
     start_seconds: Mapped[float] = mapped_column(Float)
     end_seconds: Mapped[float] = mapped_column(Float)
     duration_seconds: Mapped[float] = mapped_column(Float)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[str] = mapped_column(String(40), default=now_iso)
 
 

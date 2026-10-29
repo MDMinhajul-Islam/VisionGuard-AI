@@ -14,6 +14,8 @@ test.beforeEach(async ({page}) => {
 test("real dashboard routes render and backend data is visible", async ({page}) => {
   await page.goto("/");
   await expect(page.getByRole("heading", {name: "Operations overview"})).toBeVisible();
+  await expect(page.getByLabel("Current organization")).toHaveValue(/.+/);
+  await expect(page.getByLabel("Current site")).toHaveValue(/.+/);
   await expect(page.getByText("Controlled research mode.")).toBeVisible();
   await page.getByRole("link", {name: /Video Workspace/}).click();
   await expect(page.getByRole("heading", {name: "Video workspace"})).toBeVisible();
@@ -23,6 +25,14 @@ test("real dashboard routes render and backend data is visible", async ({page}) 
   await page.getByRole("link", {name: /Models & System/}).click();
   await expect(page.getByRole("heading", {name: "Models & system"})).toBeVisible();
   await expect(page.getByText(/NVIDIA GeForce|CPU fallback/)).toBeVisible();
+});
+
+test("revoked browser session returns to sign in", async ({page}) => {
+  const response=await page.request.post("http://127.0.0.1:8000/api/auth/logout",{headers:{Origin:"http://127.0.0.1:3000"}});
+  expect(response.status()).toBe(204);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login\?reason=session_expired/);
+  await expect(page.getByRole("heading",{name:"Sign in"})).toBeVisible();
 });
 
 test("real imported video playback and model-result inspection", async ({page}) => {

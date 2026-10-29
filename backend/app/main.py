@@ -20,19 +20,27 @@ from sqlalchemy.orm import Session
 
 from app import __version__
 from app.core.config import get_settings
+from app.core.audit import record_audit
+from app.core.authorization import (
+    accessible_video_ids, authorize_object_request, authorize_video, membership_for, resolve_scope,
+)
+from app.core.rate_limit import login_limiter
 from app.core.security import (
-    SESSION_COOKIE, authenticate_token, create_access_token, hash_password, normalize_email,
-    require_roles, verify_password,
+    DUMMY_PASSWORD_HASH, SESSION_COOKIE, authenticate_session, create_access_token, hash_password, normalize_email,
+    require_roles, revoke_all_user_sessions, revoke_session, verify_password,
 )
 from app.database import get_db, init_db
+from app.database.session import SessionLocal
 from app.database.models import (
-    CandidateEvent, DatasetAsset, EmbeddingCache, ExportedClip, ObjectDetection, PoseEvidence,
-    ProcessingJob, SafetyZone, User, ValidationAnnotation, Video, VideoFrame,
+    AuditEvent, CandidateEvent, DatasetAsset, EmbeddingCache, ExportedClip, ObjectDetection, Organization,
+    OrganizationMembership, PoseEvidence, ProcessingJob, SafetyZone, Site, SiteAccess, User,
+    ValidationAnnotation, Video, VideoFrame, now_iso,
 )
 from app.schemas.api import (
     AnnotationCreate, AnnotationOut, DatasetAssetCreate, DatasetAssetOut, EvaluationRequest, ExportRequest, JobOut,
     ProcessRequest, ReviewUpdate, SearchRequest, SearchResponse, SearchResult,
-    LoginRequest, UserCreate, UserOut, VideoOut, ZoneAnalysisRequest, ZoneCreate,
+    LoginRequest, MembershipCreate, MembershipOut, OrganizationCreate, OrganizationOut,
+    PasswordChange, SiteCreate, SiteOut, UserCreate, UserOut, VideoOut, ZoneAnalysisRequest, ZoneCreate,
 )
 from app.evaluation.annotations import deterministic_annotation_id
 from app.evaluation.metrics import IntervalEvent, evaluate_events, temporal_iou
@@ -77,7 +85,7 @@ app.add_middleware(
     allow_origins=settings.frontend_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Organization-ID", "X-Site-ID", "X-Request-ID"],
 )
 
 
@@ -86,17 +94,34 @@ PUBLIC_PATHS = {"/api/health", "/api/auth/login", "/docs", "/openapi.json", "/re
 
 @app.middleware("http")
 async def authentication_gate(request: Request, call_next):
+    request.state.request_id = request.headers.get("x-request-id") or str(uuid4())
     if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS or not request.url.path.startswith("/api/"):
-        return await call_next(request)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        return response
     authorization = request.headers.get("authorization", "")
     token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else request.cookies.get(SESSION_COOKIE)
     if not token:
-        return JSONResponse(status_code=401, content={"detail": {"code": "authentication_required", "message": "Authentication is required."}})
+        return JSONResponse(status_code=401, content={"detail": {"code": "authentication_required", "message": "Authentication is required."}}, headers={"X-Request-ID": request.state.request_id})
     try:
-        request.state.user = authenticate_token(token)
+        request.state.user, payload = authenticate_session(token)
+        request.state.session_jti = payload["jti"]
     except HTTPException as error:
-        return JSONResponse(status_code=error.status_code, content={"detail": {"code": "invalid_session", "message": str(error.detail)}})
-    return await call_next(request)
+        return JSONResponse(status_code=error.status_code, content={"detail": {"code": "invalid_session", "message": str(error.detail)}}, headers={"X-Request-ID": request.state.request_id})
+    if not authorization and request.method in {"POST", "PATCH", "PUT", "DELETE"}:
+        origin = request.headers.get("origin")
+        if origin not in settings.frontend_origins:
+            return JSONResponse(status_code=403, content={"detail": {"code": "csrf_origin_rejected", "message": "Request origin is not allowed."}}, headers={"X-Request-ID": request.state.request_id})
+    try:
+        authorize_object_request(request, request.state.user)
+    except HTTPException as error:
+        with SessionLocal() as audit_db:
+            record_audit(audit_db, request, "authorization.object_access", "denied", actor=request.state.user, organization_id=getattr(request.state, "organization_id", None), object_type="api_path", metadata={"method": request.method, "path": request.url.path})
+            audit_db.commit()
+        return JSONResponse(status_code=error.status_code, content={"detail": {"code": "resource_not_found", "message": "Resource not found."}}, headers={"X-Request-ID": request.state.request_id})
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request.state.request_id
+    return response
 
 
 @app.middleware("http")
@@ -165,11 +190,23 @@ def health():
 
 
 @app.post("/api/auth/login", response_model=UserOut)
-def login(request: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == normalize_email(request.email)))
-    if not user or user.disabled or not verify_password(request.password, user.password_hash):
+def login(body: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    rate_key = f"{request.client.host if request.client else 'unknown'}:{body.email.strip().casefold()}"
+    if not login_limiter.allow(rate_key, settings.login_rate_limit_attempts, settings.login_rate_limit_window_seconds):
+        record_audit(db, request, "authentication.login", "rate_limited")
+        db.commit()
+        raise HTTPException(429, "invalid credentials")
+    user = db.scalar(select(User).where(User.email == normalize_email(body.email)))
+    password_valid = verify_password(body.password, user.password_hash if user else DUMMY_PASSWORD_HASH)
+    if not user or user.disabled or not password_valid:
+        # The response intentionally does not distinguish missing, disabled, or wrong-password accounts.
+        record_audit(db, request, "authentication.login", "denied", actor=user if user and not user.disabled else None)
+        db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
-    token = create_access_token(user)
+    token = create_access_token(user, db)
+    login_limiter.clear(rate_key)
+    record_audit(db, request, "authentication.login", "success", actor=user)
+    db.commit()
     response.set_cookie(
         SESSION_COOKIE, token, httponly=True, secure=settings.auth_cookie_secure,
         samesite="strict", max_age=settings.auth_token_minutes * 60, path="/",
@@ -178,7 +215,10 @@ def login(request: LoginRequest, response: Response, db: Session = Depends(get_d
 
 
 @app.post("/api/auth/logout", status_code=204)
-def logout(response: Response):
+def logout(request: Request, response: Response, db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    revoke_session(request.state.session_jti)
+    record_audit(db, request, "authentication.logout", "success", actor=user)
+    db.commit()
     response.delete_cookie(SESSION_COOKIE, path="/", samesite="strict")
 
 
@@ -187,42 +227,133 @@ def auth_me(user: User = Depends(require_roles("admin", "reviewer"))):
     return user
 
 
+@app.post("/api/auth/change-password", status_code=204)
+def change_password(body: PasswordChange, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    stored = db.get(User, user.id)
+    if not stored or not verify_password(body.current_password, stored.password_hash):
+        raise HTTPException(400, "password change failed")
+    stored.password_hash = hash_password(body.new_password)
+    revoke_all_user_sessions(stored, db)
+    record_audit(db, request, "authentication.password_changed", "success", actor=stored)
+    db.commit()
+
+
 @app.post("/api/admin/users", response_model=UserOut, status_code=201)
-def create_user(request: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
-    email = normalize_email(request.email)
+def create_user(body: UserCreate, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin"))):
+    email = normalize_email(body.email)
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(409, "email is already registered")
     user = User(
-        email=email, display_name=request.display_name.strip(),
-        password_hash=hash_password(request.password), role=request.role,
+        email=email, display_name=body.display_name.strip(),
+        password_hash=hash_password(body.password), role=body.role,
     )
     db.add(user)
+    db.flush()
+    record_audit(db, request, "administration.user_created", "success", actor=actor, object_type="user", object_id=user.id)
     db.commit()
     db.refresh(user)
     return user
 
 
+@app.post("/api/admin/organizations", response_model=OrganizationOut, status_code=201)
+def create_organization(body: OrganizationCreate, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin"))):
+    if db.scalar(select(Organization).where(func.lower(Organization.name) == body.name.strip().lower())):
+        raise HTTPException(409, "organization already exists")
+    organization = Organization(name=body.name.strip(), workspace_type=body.workspace_type)
+    db.add(organization); db.flush()
+    record_audit(db, request, "administration.organization_created", "success", actor=actor, organization_id=organization.id, object_type="organization", object_id=organization.id)
+    db.commit(); db.refresh(organization)
+    return organization
+
+
+@app.get("/api/organizations")
+def list_organizations(db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    memberships = db.scalars(select(OrganizationMembership).where(
+        OrganizationMembership.user_id == user.id, OrganizationMembership.status == "active"
+    )).all()
+    result = []
+    for membership in memberships:
+        organization = db.get(Organization, membership.organization_id)
+        sites = db.scalars(select(Site).where(Site.organization_id == membership.organization_id)).all()
+        allowed_sites = sites if membership.role == "organization_admin" else [site for site in sites if db.scalar(select(SiteAccess.id).where(SiteAccess.membership_id == membership.id, SiteAccess.site_id == site.id))]
+        if organization:
+            result.append({
+                **OrganizationOut.model_validate(organization).model_dump(),
+                "membership_role": membership.role,
+                "sites": [SiteOut.model_validate(site).model_dump() for site in allowed_sites],
+            })
+    return result
+
+
+@app.post("/api/admin/organizations/{organization_id}/sites", response_model=SiteOut, status_code=201)
+def create_site(organization_id: str, body: SiteCreate, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin"))):
+    organization = db.get(Organization, organization_id)
+    if not organization:
+        raise HTTPException(404, "organization not found")
+    site = Site(organization_id=organization_id, name=body.name.strip())
+    db.add(site); db.flush()
+    record_audit(db, request, "administration.site_created", "success", actor=actor, organization_id=organization_id, object_type="site", object_id=site.id)
+    db.commit(); db.refresh(site)
+    return site
+
+
+@app.post("/api/admin/organizations/{organization_id}/memberships", response_model=MembershipOut, status_code=201)
+def create_membership(organization_id: str, body: MembershipCreate, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin"))):
+    if not db.get(Organization, organization_id) or not db.get(User, body.user_id):
+        raise HTTPException(404, "organization or user not found")
+    existing = membership_for(db, body.user_id, organization_id)
+    membership = existing or OrganizationMembership(user_id=body.user_id, organization_id=organization_id, role=body.role)
+    membership.role = body.role; membership.status = "active"
+    db.add(membership); db.flush()
+    db.query(SiteAccess).filter(SiteAccess.membership_id == membership.id).delete()
+    valid_sites = set(db.scalars(select(Site.id).where(Site.organization_id == organization_id, Site.id.in_(body.site_ids))).all())
+    if valid_sites != set(body.site_ids):
+        raise HTTPException(422, "site access contains a site outside the organization")
+    for site_id in valid_sites:
+        db.add(SiteAccess(membership_id=membership.id, site_id=site_id))
+    record_audit(db, request, "administration.membership_changed", "success", actor=actor, organization_id=organization_id, object_type="membership", object_id=membership.id, metadata={"role": body.role, "site_count": len(valid_sites)})
+    db.commit(); db.refresh(membership)
+    return membership
+
+
+@app.get("/api/admin/audit")
+def list_audit_events(organization_id: str, limit: int = 100, db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    membership = membership_for(db, user.id, organization_id)
+    if not membership or membership.role != "organization_admin":
+        raise HTTPException(404, "resource not found")
+    rows = db.scalars(select(AuditEvent).where(AuditEvent.organization_id == organization_id).order_by(AuditEvent.created_at.desc()).limit(min(max(limit, 1), 500))).all()
+    return [{
+        "id": row.id, "actor_id": row.actor_id, "organization_id": row.organization_id,
+        "action": row.action, "object_type": row.object_type, "object_id": row.object_id,
+        "outcome": row.outcome, "request_id": row.request_id,
+        "metadata": json.loads(row.metadata_json), "created_at": row.created_at,
+    } for row in rows]
+
+
 @app.get("/api/overview")
-def overview(db: Session = Depends(get_db)):
-    count = lambda model, *criteria: db.scalar(select(func.count()).select_from(model).where(*criteria)) or 0
+def overview(db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    visible = accessible_video_ids(db, user)
+    count = lambda model, video_column, *criteria: db.scalar(select(func.count()).select_from(model).where(video_column.in_(visible), *criteria)) or 0
     return {
-        "videos": count(Video), "jobs": count(ProcessingJob),
-        "indexed_videos": count(Video, Video.status == "indexed"),
-        "candidate_events": count(CandidateEvent),
-        "pending_review": count(CandidateEvent, CandidateEvent.review_status == "pending"),
-        "processing_failures": count(ProcessingJob, ProcessingJob.status == "failed"),
+        "videos": count(Video, Video.id), "jobs": count(ProcessingJob, ProcessingJob.video_id),
+        "indexed_videos": count(Video, Video.id, Video.status == "indexed"),
+        "candidate_events": count(CandidateEvent, CandidateEvent.video_id),
+        "pending_review": count(CandidateEvent, CandidateEvent.video_id, CandidateEvent.review_status == "pending"),
+        "processing_failures": count(ProcessingJob, ProcessingJob.video_id, ProcessingJob.status == "failed"),
     }
 
 
 @app.post("/api/videos/upload", response_model=VideoOut, status_code=status.HTTP_201_CREATED)
-async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+async def upload_video(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "reviewer"))):
+    organization, site, _ = resolve_scope(db, actor, request.headers.get("x-organization-id"), request.headers.get("x-site-id"), "manage")
     original = Path(file.filename or "upload.mp4").name
     extension = Path(original).suffix.lower()
     if extension not in SUPPORTED_EXTENSIONS:
         raise HTTPException(415, detail={"code": "unsupported_format", "message": "Supported formats: MP4, M4V, MOV"})
     identifier = str(uuid4())
     stored_name = f"{identifier}{extension}"
-    destination = safe_within(settings.uploads_dir / stored_name, settings.uploads_dir)
+    destination = safe_within(settings.uploads_dir / organization.workspace_type / organization.id / site.id / stored_name, settings.uploads_dir)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     max_bytes = settings.max_upload_mb * 1024 * 1024
     total = 0
     try:
@@ -239,19 +370,22 @@ async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_d
         destination.unlink(missing_ok=True)
         raise
     video = Video(
-        id=identifier, original_filename=original, stored_filename=stored_name,
-        path=str(destination), mime_type=file.content_type or "video/mp4", size_bytes=total,
+        id=identifier, organization_id=organization.id, site_id=site.id,
+        original_filename=original, stored_filename=stored_name,
+        path=str(destination), mime_type="video/mp4", size_bytes=total,
         duration_seconds=metadata["duration_seconds"], width=metadata["width"], height=metadata["height"],
         fps=metadata["fps"], codec=metadata["codec"], status="uploaded",
     )
     db.add(video)
+    record_audit(db, request, "video.uploaded", "success", actor=actor, organization_id=organization.id, object_type="video", object_id=video.id, metadata={"site_id": site.id, "size_bytes": total})
     db.commit()
     return video_out(video)
 
 
 @app.get("/api/videos", response_model=list[VideoOut])
-def list_videos(db: Session = Depends(get_db)):
-    return [video_out(item) for item in db.scalars(select(Video).order_by(Video.created_at.desc())).all()]
+def list_videos(db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    visible = accessible_video_ids(db, user)
+    return [video_out(item) for item in db.scalars(select(Video).where(Video.id.in_(visible)).order_by(Video.created_at.desc())).all()]
 
 
 @app.get("/api/videos/{video_id}", response_model=VideoOut)
@@ -263,11 +397,13 @@ def get_video(video_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/videos/{video_id}/media")
-def video_media(video_id: str, db: Session = Depends(get_db)):
+def video_media(video_id: str, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "reviewer"))):
     video = db.get(Video, video_id)
     if not video:
         raise HTTPException(404, "video not found")
     path = safe_within(Path(video.path), settings.uploads_dir)
+    record_audit(db, request, "video.media_accessed", "success", actor=actor, organization_id=video.organization_id, object_type="video", object_id=video.id)
+    db.commit()
     return FileResponse(path, media_type=video.mime_type, filename=video.original_filename)
 
 
@@ -280,7 +416,7 @@ def video_thumbnail(video_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/{video_id}/process", response_model=JobOut, status_code=202)
-def process_video(video_id: str, request: ProcessRequest, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+def process_video(video_id: str, body: ProcessRequest, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "reviewer"))):
     video = db.get(Video, video_id)
     if not video:
         raise HTTPException(404, "video not found")
@@ -292,13 +428,18 @@ def process_video(video_id: str, request: ProcessRequest, db: Session = Depends(
         CandidateEvent.synthetic_fixture.is_(False),
         CandidateEvent.review_status != "pending",
     )) or 0
-    if reviewed and not request.allow_reprocess_reviewed:
+    if reviewed and not body.allow_reprocess_reviewed:
         raise HTTPException(409, detail={
             "code": "reviewed_events_exist",
             "message": "Reprocessing would invalidate reviewed model evidence. Export/preserve it first or explicitly set allow_reprocess_reviewed=true.",
         })
-    job = ProcessingJob(video_id=video_id, config_json=request.model_dump_json())
+    organization = db.get(Organization, video.organization_id)
+    if body.enable_clip and (not organization or organization.workspace_type != "research"):
+        raise HTTPException(403, "CLIP is restricted to explicitly designated research workspaces")
+    job = ProcessingJob(video_id=video_id, config_json=body.model_dump_json())
     db.add(job)
+    db.flush()
+    record_audit(db, request, "processing.job_created", "success", actor=actor, organization_id=video.organization_id, object_type="processing_job", object_id=job.id, metadata={"video_id": video.id})
     db.commit()
     job_queue.submit(job.id, process_video_job)
     return job
@@ -313,19 +454,25 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/jobs/{job_id}/cancel", response_model=JobOut)
-def cancel_job(job_id: str, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+def cancel_job(job_id: str, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "reviewer"))):
     job = db.get(ProcessingJob, job_id)
     if not job:
         raise HTTPException(404, "job not found")
     if job.status not in {"queued", "running"}:
         raise HTTPException(409, "job is not cancellable")
     job.cancel_requested = True
+    video = db.get(Video, job.video_id)
+    record_audit(db, request, "processing.job_cancel_requested", "success", actor=actor, organization_id=video.organization_id if video else None, object_type="processing_job", object_id=job.id)
     db.commit()
     return job
 
 
 @app.post("/api/videos/{video_id}/search", response_model=SearchResponse)
 def semantic_search(video_id: str, request: SearchRequest, db: Session = Depends(get_db)):
+    video = db.get(Video, video_id)
+    organization = db.get(Organization, video.organization_id) if video else None
+    if not organization or organization.workspace_type != "research":
+        raise HTTPException(403, "CLIP semantic search is restricted to research workspaces")
     cache = db.scalar(select(EmbeddingCache).where(EmbeddingCache.video_id == video_id))
     if not cache:
         raise HTTPException(409, "video has no CLIP index")
@@ -410,7 +557,7 @@ def detections(video_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/{video_id}/zones", status_code=201)
-def create_zone(video_id: str, request: ZoneCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+def create_zone(video_id: str, request: ZoneCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
     if not db.get(Video, video_id):
         raise HTTPException(404, "video not found")
     zone = SafetyZone(video_id=video_id, name=request.name, zone_type=request.zone_type, polygon_json=json.dumps(request.polygon))
@@ -426,7 +573,7 @@ def zones(video_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/videos/{video_id}/zones/analyze")
-def analyze_zones(video_id: str, request: ZoneAnalysisRequest = ZoneAnalysisRequest(), db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+def analyze_zones(video_id: str, request: ZoneAnalysisRequest = ZoneAnalysisRequest(), db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
     zone_rows = db.scalars(select(SafetyZone).where(SafetyZone.video_id == video_id)).all()
     detection_rows = db.scalars(select(ObjectDetection).where(ObjectDetection.video_id == video_id)).all()
     reviewed_events = db.scalars(select(CandidateEvent).where(
@@ -489,8 +636,8 @@ def video_events(video_id: str, event_type: str | None = None, db: Session = Dep
 
 
 @app.get("/api/events")
-def all_events(status_filter: str | None = None, db: Session = Depends(get_db)):
-    query = select(CandidateEvent)
+def all_events(status_filter: str | None = None, db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    query = select(CandidateEvent).where(CandidateEvent.video_id.in_(accessible_video_ids(db, user)))
     if status_filter:
         query = query.where(CandidateEvent.review_status == status_filter)
     return [event_dict(item) for item in db.scalars(query.order_by(CandidateEvent.created_at.desc())).all()]
@@ -532,10 +679,11 @@ def get_event_evidence(event_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/validation/annotations", response_model=AnnotationOut, status_code=201)
-def create_annotation(request: AnnotationCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+def create_annotation(request: AnnotationCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "reviewer"))):
     video = db.get(Video, request.video_id)
     if not video:
         raise HTTPException(404, "video not found")
+    authorize_video(db, actor, video, "manage")
     if video.duration_seconds is not None and request.end_seconds > video.duration_seconds + 1e-6:
         raise HTTPException(422, "annotation exceeds video duration")
     identifier = deterministic_annotation_id(request)
@@ -549,15 +697,15 @@ def create_annotation(request: AnnotationCreate, db: Session = Depends(get_db), 
 
 
 @app.get("/api/validation/annotations", response_model=list[AnnotationOut])
-def list_annotations(video_id: str | None = None, db: Session = Depends(get_db)):
-    query = select(ValidationAnnotation)
+def list_annotations(video_id: str | None = None, db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    query = select(ValidationAnnotation).where(ValidationAnnotation.video_id.in_(accessible_video_ids(db, user)))
     if video_id:
         query = query.where(ValidationAnnotation.video_id == video_id)
     return db.scalars(query.order_by(ValidationAnnotation.video_id, ValidationAnnotation.start_seconds)).all()
 
 
 @app.delete("/api/validation/annotations/{annotation_id}", status_code=204)
-def delete_annotation(annotation_id: str, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+def delete_annotation(annotation_id: str, db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
     annotation = db.get(ValidationAnnotation, annotation_id)
     if not annotation:
         raise HTTPException(404, "annotation not found")
@@ -566,7 +714,7 @@ def delete_annotation(annotation_id: str, db: Session = Depends(get_db), _: User
 
 
 @app.post("/api/videos/{video_id}/evaluate")
-def evaluate_video(video_id: str, request: EvaluationRequest, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
+def evaluate_video(video_id: str, request: EvaluationRequest, db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
     positives = db.scalars(select(ValidationAnnotation).where(
         ValidationAnnotation.video_id == video_id,
         ValidationAnnotation.event_type == request.event_type,
@@ -592,9 +740,14 @@ def evaluate_video(video_id: str, request: EvaluationRequest, db: Session = Depe
 
 
 @app.post("/api/datasets/assets", response_model=DatasetAssetOut, status_code=201)
-def register_dataset_asset(request: DatasetAssetCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin"))):
-    if not db.get(Video, request.video_id):
+def register_dataset_asset(request: DatasetAssetCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "reviewer"))):
+    video = db.get(Video, request.video_id)
+    if not video:
         raise HTTPException(404, "video not found")
+    authorize_video(db, actor, video, "manage")
+    organization = db.get(Organization, video.organization_id)
+    if not organization or organization.workspace_type != "research":
+        raise HTTPException(403, "research datasets may only be registered in research workspaces")
     deterministic_id = "ds-" + hashlib.sha256(
         f"{request.dataset_name}|{request.original_recording_id}".encode("utf-8")
     ).hexdigest()[:32]
@@ -631,16 +784,16 @@ def register_dataset_asset(request: DatasetAssetCreate, db: Session = Depends(ge
 
 
 @app.get("/api/datasets/assets")
-def list_dataset_assets(dataset_name: str | None = None, db: Session = Depends(get_db)):
-    statement = select(DatasetAsset).order_by(DatasetAsset.dataset_name, DatasetAsset.original_recording_id)
+def list_dataset_assets(dataset_name: str | None = None, db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    statement = select(DatasetAsset).where(DatasetAsset.video_id.in_(accessible_video_ids(db, user))).order_by(DatasetAsset.dataset_name, DatasetAsset.original_recording_id)
     if dataset_name:
         statement = statement.where(DatasetAsset.dataset_name == dataset_name)
     return [dataset_asset_dict(asset, db) for asset in db.scalars(statement).all()]
 
 
 @app.get("/api/datasets/summary")
-def dataset_summary(db: Session = Depends(get_db)):
-    assets = db.scalars(select(DatasetAsset)).all()
+def dataset_summary(db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer"))):
+    assets = db.scalars(select(DatasetAsset).where(DatasetAsset.video_id.in_(accessible_video_ids(db, user)))).all()
     names = sorted({asset.dataset_name for asset in assets})
     return {
         "datasets": [{
@@ -713,9 +866,9 @@ def dataset_evaluation(
     dataset_name: str | None = None,
     completed_only: bool = True,
     cohort: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: User = Depends(require_roles("admin", "reviewer")),
 ):
-    statement = select(DatasetAsset).order_by(DatasetAsset.original_recording_id)
+    statement = select(DatasetAsset).where(DatasetAsset.video_id.in_(accessible_video_ids(db, user))).order_by(DatasetAsset.original_recording_id)
     if dataset_name:
         statement = statement.where(DatasetAsset.dataset_name == dataset_name)
     if cohort == "original_20":
@@ -756,27 +909,33 @@ def dataset_evaluation(
 
 
 @app.patch("/api/events/{event_id}/review")
-def review_event(event_id: str, request: ReviewUpdate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
+def review_event(event_id: str, body: ReviewUpdate, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "reviewer"))):
     event = db.get(CandidateEvent, event_id)
     if not event:
         raise HTTPException(404, "event not found")
-    event.review_status = request.status
-    event.reviewer_note = request.reviewer_note
+    event.review_status = body.status
+    event.reviewer_note = body.reviewer_note
+    event.reviewer_id = actor.id
+    event.reviewed_at = now_iso()
+    video = db.get(Video, event.video_id)
+    record_audit(db, request, "incident.review_changed", "success", actor=actor, organization_id=video.organization_id if video else None, object_type="candidate_event", object_id=event.id, metadata={"status": body.status})
     db.commit()
     return event_dict(event)
 
 
 @app.post("/api/events/{event_id}/export", status_code=201)
-def export_event(event_id: str, request: ExportRequest, db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
+def export_event(event_id: str, body: ExportRequest, request: Request, db: Session = Depends(get_db), actor: User = Depends(require_roles("admin", "reviewer"))):
     event = db.get(CandidateEvent, event_id)
     if not event:
         raise HTTPException(404, "event not found")
     video = db.get(Video, event.video_id)
     clip_id = str(uuid4())
-    destination = settings.exports_dir / f"{clip_id}.mp4"
-    elapsed = export_clip(Path(video.path), destination, request.start_seconds, request.end_seconds, video.duration_seconds or 0)
-    clip = ExportedClip(id=clip_id, video_id=video.id, event_id=event.id, path=str(destination), start_seconds=request.start_seconds, end_seconds=request.end_seconds, duration_seconds=request.end_seconds - request.start_seconds)
+    destination = safe_within(settings.exports_dir / video.organization_id / video.site_id / f"{clip_id}.mp4", settings.exports_dir)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    elapsed = export_clip(Path(video.path), destination, body.start_seconds, body.end_seconds, video.duration_seconds or 0)
+    clip = ExportedClip(id=clip_id, video_id=video.id, event_id=event.id, path=str(destination), start_seconds=body.start_seconds, end_seconds=body.end_seconds, duration_seconds=body.end_seconds - body.start_seconds, created_by_user_id=actor.id)
     db.add(clip)
+    record_audit(db, request, "evidence.exported", "success", actor=actor, organization_id=video.organization_id, object_type="exported_clip", object_id=clip.id, metadata={"event_id": event.id})
     db.commit()
     return {"id": clip.id, "download_url": f"/api/exports/{clip.id}/download", "export_seconds": elapsed}
 

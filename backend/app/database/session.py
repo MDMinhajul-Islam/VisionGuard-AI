@@ -32,6 +32,8 @@ def get_db():
 
 def init_db() -> None:
     from app.database import models  # noqa: F401
+    from app.database.migrations import run_non_destructive_migrations
 
     Base.metadata.create_all(bind=engine)
+    run_non_destructive_migrations(engine)
 

@@ -5,18 +5,28 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.core.security import hash_password
-from app.database.models import CandidateEvent, DatasetAsset, ObjectDetection, PoseEvidence, SafetyZone, User, ValidationAnnotation, Video, VideoFrame
+from app.database.models import CandidateEvent, DatasetAsset, ObjectDetection, Organization, OrganizationMembership, PoseEvidence, SafetyZone, Site, SiteAccess, User, ValidationAnnotation, Video, VideoFrame
 from app.database.session import SessionLocal
 from app.main import app
+
+
+TEST_ORG_ID = "10000000-0000-4000-8000-000000000001"
+TEST_SITE_ID = "10000000-0000-4000-8000-000000000002"
 
 
 @contextmanager
 def authenticated_client(role="admin"):
     with TestClient(app) as client:
+        client.headers["Origin"] = "http://localhost:3000"
         email = f"{role}-{uuid4()}@test.local"
         password = "test-only-password-123!"
         db = SessionLocal()
-        db.add(User(email=email, display_name=f"Test {role}", password_hash=hash_password(password), role=role))
+        user = User(email=email, display_name=f"Test {role}", password_hash=hash_password(password), role=role)
+        db.merge(Organization(id=TEST_ORG_ID, name="Test Research Organization", workspace_type="research"))
+        db.merge(Site(id=TEST_SITE_ID, organization_id=TEST_ORG_ID, name="Test Site"))
+        db.add(user); db.flush()
+        membership = OrganizationMembership(user_id=user.id, organization_id=TEST_ORG_ID, role="organization_admin" if role == "admin" else "safety_reviewer")
+        db.add(membership); db.flush(); db.add(SiteAccess(membership_id=membership.id, site_id=TEST_SITE_ID))
         db.commit()
         db.close()
         response = client.post("/api/auth/login", json={"email": email, "password": password})
@@ -38,14 +48,17 @@ def test_upload_rejects_unsupported_extension():
 
 
 def test_zone_polygon_validation():
+    db = SessionLocal()
+    db.merge(Video(id="v-polygon", organization_id=TEST_ORG_ID, site_id=TEST_SITE_ID, original_filename="polygon.mp4", stored_filename="polygon.mp4", path="polygon.mp4", size_bytes=1))
+    db.commit(); db.close()
     with authenticated_client() as client:
-        response = client.post("/api/videos/missing/zones", json={"name": "bad", "polygon": [[0, 0], [1, 1], [2, 2]]})
+        response = client.post("/api/videos/v-polygon/zones", json={"name": "bad", "polygon": [[0, 0], [1, 1], [2, 2]]})
         assert response.status_code == 422
 
 
 def test_human_review_update():
     db = SessionLocal()
-    video = Video(id="v-test", original_filename="fixture.mp4", stored_filename="fixture.mp4", path="fixture.mp4", size_bytes=1, status="uploaded")
+    video = Video(id="v-test", organization_id=TEST_ORG_ID, site_id=TEST_SITE_ID, original_filename="fixture.mp4", stored_filename="fixture.mp4", path="fixture.mp4", size_bytes=1, status="uploaded")
     event = CandidateEvent(
         id="e-test", video_id=video.id, event_type="synthetic_demo_fixture", label="Synthetic Fixture",
         start_seconds=0, end_seconds=1, processing_method="test", model_version="none",
@@ -64,7 +77,7 @@ def test_human_review_update():
 
 def test_annotation_create_is_deterministic_and_evaluation_is_event_level():
     db = SessionLocal()
-    video = Video(id="v-annotation", original_filename="authorized.mp4", stored_filename="authorized.mp4", path="authorized.mp4", size_bytes=1, duration_seconds=10, status="indexed")
+    video = Video(id="v-annotation", organization_id=TEST_ORG_ID, site_id=TEST_SITE_ID, original_filename="authorized.mp4", stored_filename="authorized.mp4", path="authorized.mp4", size_bytes=1, duration_seconds=10, status="indexed")
     prediction = CandidateEvent(id="p-annotation", video_id=video.id, event_type="potential_fall", label="Potential Fall — Review Required", start_seconds=2.2, end_seconds=3.4, processing_method="test", model_version="test", raw_scores_json="{}", thresholds_json="{}", supporting_frames_json="[]")
     db.merge(video); db.merge(prediction); db.commit(); db.close()
     payload = {"video_id": video.id, "event_type": "potential_fall", "start_seconds": 2, "end_seconds": 3.5, "ground_truth_label": "positive", "annotation_source": "authorized staged reviewer", "split": "evaluation"}
@@ -80,7 +93,7 @@ def test_annotation_create_is_deterministic_and_evaluation_is_event_level():
 
 def test_reprocess_requires_explicit_override_when_reviewed_model_events_exist():
     db = SessionLocal()
-    video = Video(id="v-reviewed", original_filename="reviewed.mp4", stored_filename="reviewed.mp4", path="reviewed.mp4", size_bytes=1, duration_seconds=5, status="indexed")
+    video = Video(id="v-reviewed", organization_id=TEST_ORG_ID, site_id=TEST_SITE_ID, original_filename="reviewed.mp4", stored_filename="reviewed.mp4", path="reviewed.mp4", size_bytes=1, duration_seconds=5, status="indexed")
     event = CandidateEvent(id="e-reviewed", video_id=video.id, event_type="potential_fall", label="Potential Fall — Review Required", start_seconds=1, end_seconds=2, processing_method="test", model_version="test", raw_scores_json="{}", thresholds_json="{}", supporting_frames_json="[]", review_status="false_positive", synthetic_fixture=False)
     db.merge(video); db.merge(event); db.commit(); db.close()
     with authenticated_client() as client:
@@ -91,7 +104,7 @@ def test_reprocess_requires_explicit_override_when_reviewed_model_events_exist()
 
 def test_frame_evidence_keeps_pose_sync_error_and_actual_detections_separate():
     db = SessionLocal()
-    video = Video(id="v-evidence", original_filename="evidence.mp4", stored_filename="evidence.mp4", path="evidence.mp4", size_bytes=1, duration_seconds=5, status="indexed")
+    video = Video(id="v-evidence", organization_id=TEST_ORG_ID, site_id=TEST_SITE_ID, original_filename="evidence.mp4", stored_filename="evidence.mp4", path="evidence.mp4", size_bytes=1, duration_seconds=5, status="indexed")
     frame = VideoFrame(id="f-evidence", video_id=video.id, timestamp_seconds=1.0, frame_number=25, path="unused.jpg", width=640, height=360)
     detection = ObjectDetection(id="d-evidence", video_id=video.id, frame_id=frame.id, timestamp_seconds=1.0, label="person", confidence=.91, bbox_json="[0.1,0.1,0.5,0.9]", track_id=3)
     pose = PoseEvidence(id="pose-evidence", video_id=video.id, frame_id=frame.id, timestamp_seconds=1.04, frame_timestamp_seconds=1.0, sync_error_seconds=.04, landmarks_json="[]", signals_json='{"state":"upright"}', sufficient_evidence=True)
@@ -105,7 +118,7 @@ def test_frame_evidence_keeps_pose_sync_error_and_actual_detections_separate():
 
 def test_zone_reanalysis_preserves_reviewed_event_without_duplicate():
     db = SessionLocal()
-    video = Video(id="v-zone-reviewed", original_filename="zone.mp4", stored_filename="zone-reviewed.mp4", path="zone.mp4", size_bytes=1, duration_seconds=5, status="indexed")
+    video = Video(id="v-zone-reviewed", organization_id=TEST_ORG_ID, site_id=TEST_SITE_ID, original_filename="zone.mp4", stored_filename="zone-reviewed.mp4", path="zone.mp4", size_bytes=1, duration_seconds=5, status="indexed")
     zone = SafetyZone(id="z-reviewed", video_id=video.id, name="Exit", zone_type="emergency_exit", polygon_json="[[0.5,0.5],[0.9,0.5],[0.9,0.9],[0.5,0.9]]")
     reviewed = CandidateEvent(id="e-zone-reviewed", video_id=video.id, event_type="potential_exit_obstruction", label="Potential Exit Obstruction — Review Required", start_seconds=0, end_seconds=2, processing_method="test", model_version="test", raw_scores_json='{"zone_id":"z-reviewed"}', thresholds_json="{}", supporting_frames_json="[]", review_status="false_positive")
     db.merge(video); db.merge(zone); db.merge(reviewed)
@@ -125,7 +138,7 @@ def test_zone_reanalysis_preserves_reviewed_event_without_duplicate():
 
 def test_dataset_asset_registration_is_idempotent_and_video_metrics_are_real_predictions():
     db = SessionLocal()
-    video = Video(id="v-dataset", original_filename="fall-01.mp4", stored_filename="dataset-fall-01.mp4", path="unused.mp4", size_bytes=1, duration_seconds=3, status="indexed")
+    video = Video(id="v-dataset", organization_id=TEST_ORG_ID, site_id=TEST_SITE_ID, original_filename="fall-01.mp4", stored_filename="dataset-fall-01.mp4", path="unused.mp4", size_bytes=1, duration_seconds=3, status="indexed")
     event = CandidateEvent(id="e-dataset", video_id=video.id, event_type="potential_fall", label="Potential Fall — Review Required", start_seconds=1, end_seconds=2, processing_method="pose_temporal_rules", model_version="test", raw_scores_json="{}", thresholds_json="{}", supporting_frames_json="[]", synthetic_fixture=False)
     db.merge(video); db.merge(event); db.commit(); db.close()
     payload = {
@@ -155,10 +168,13 @@ def test_sensitive_routes_are_denied_without_authentication():
 
 
 def test_reviewer_is_read_review_export_role_not_administrator():
+    db = SessionLocal()
+    db.merge(Video(id="v-reviewer-role", organization_id=TEST_ORG_ID, site_id=TEST_SITE_ID, original_filename="role.mp4", stored_filename="role.mp4", path="role.mp4", size_bytes=1))
+    db.commit(); db.close()
     with authenticated_client("reviewer") as client:
         assert client.get("/api/videos").status_code == 200
-        assert client.post("/api/videos/missing/process", json={}).status_code == 403
-        assert client.post("/api/videos/missing/zones", json={"name": "Exit", "polygon": [[0, 0], [1, 0], [1, 1]]}).status_code == 403
+        assert client.post("/api/videos/v-reviewer-role/process", json={}).status_code == 404
+        assert client.post("/api/videos/v-reviewer-role/zones", json={"name": "Exit", "polygon": [[0, 0], [1, 0], [1, 1]]}).status_code == 404
         assert client.post("/api/admin/users", json={"email": "new@test.local", "display_name": "New", "password": "long-test-password!", "role": "reviewer"}).status_code == 403
 
 

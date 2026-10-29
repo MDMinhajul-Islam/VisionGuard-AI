@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     auth_secret: str | None = None
     auth_token_minutes: int = Field(default=480, ge=5, le=10080)
     auth_cookie_secure: bool = False
+    login_rate_limit_attempts: int = Field(default=5, ge=2, le=100)
+    login_rate_limit_window_seconds: int = Field(default=300, ge=10, le=3600)
     database_url: str | None = None
     runtime_dir: Path = PROJECT_ROOT / "runtime"
     model_dir: Path = PROJECT_ROOT / "models"
