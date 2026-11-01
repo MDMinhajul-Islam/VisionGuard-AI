@@ -69,9 +69,30 @@ export function asset(path?: string | null) {
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
 
+const TENANT_SCOPE_READY = "visionguard:tenant-scope-ready";
+
+export function announceTenantScopeReady() {
+  window.dispatchEvent(new Event(TENANT_SCOPE_READY));
+}
+
+async function waitForTenantScope(path: string) {
+  if (path === "/api/auth/me" || path === "/api/organizations") return;
+  if (localStorage.getItem("visionguard_org_id") && localStorage.getItem("visionguard_site_id")) return;
+  await new Promise<void>((resolve) => {
+    const timeout = window.setTimeout(done, 3000);
+    function done() {
+      window.clearTimeout(timeout);
+      window.removeEventListener(TENANT_SCOPE_READY, done);
+      resolve();
+    }
+    window.addEventListener(TENANT_SCOPE_READY, done, {once: true});
+  });
+}
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (typeof window !== "undefined") {
+    await waitForTenantScope(path);
     const organizationId = localStorage.getItem("visionguard_org_id");
     const siteId = localStorage.getItem("visionguard_site_id");
     if (organizationId) headers.set("X-Organization-ID", organizationId);

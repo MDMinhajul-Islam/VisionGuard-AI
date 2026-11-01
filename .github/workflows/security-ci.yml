@@ -1,16 +1,30 @@
-name: Security CI
+name: Database Security CI
 
 on:
   pull_request:
   push:
-    branches: [feat/enterprise-security-isolation]
+    branches: [feat/enterprise-security-isolation, feat/postgresql-rls-data-foundation]
 
 permissions:
   contents: read
 
 jobs:
   backend-security:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.11-bookworm
+        env:
+          POSTGRES_DB: visionguard_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres-ci-admin-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d visionguard_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,10 +38,34 @@ jobs:
           pip install -e "backend[test]"
       - name: Dependency consistency
         run: pip check
-      - name: Authorization, migration, and backend tests
+      - name: Bootstrap least-privilege database roles
+        env:
+          PGPASSWORD: postgres-ci-admin-only
+        run: |
+          psql -h 127.0.0.1 -U postgres -d visionguard_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE visionguard_migrator LOGIN PASSWORD 'ci-migrator-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT BYPASSRLS;
+          CREATE ROLE visionguard_app LOGIN PASSWORD 'ci-app-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE visionguard_test TO visionguard_migrator;
+          GRANT CONNECT ON DATABASE visionguard_test TO visionguard_app;
+          GRANT USAGE, CREATE ON SCHEMA public TO visionguard_migrator;
+          GRANT USAGE ON SCHEMA public TO visionguard_app;
+          SQL
+      - name: Apply PostgreSQL migrations
+        env:
+          VISIONGUARD_MIGRATION_DATABASE_URL: postgresql+psycopg://visionguard_migrator:ci-migrator-only@127.0.0.1:5432/visionguard_test
+          VISIONGUARD_APP_USER: visionguard_app
+        run: python -m alembic -c backend/alembic.ini upgrade head
+      - name: SQLite compatibility and backend tests
         env:
           VISIONGUARD_AUTH_SECRET: ci-only-secret-with-at-least-thirty-two-characters
-        run: python -m pytest backend/tests -m "not integration" --strict-markers
+        run: python -m pytest backend/tests -m "not integration and not postgres" --strict-markers
+      - name: Direct SQL RLS and PostgreSQL API tests
+        env:
+          VISIONGUARD_AUTH_SECRET: ci-only-secret-with-at-least-thirty-two-characters
+          VISIONGUARD_DATABASE_URL: postgresql+psycopg://visionguard_app:ci-app-only@127.0.0.1:5432/visionguard_test
+          VISIONGUARD_TEST_APP_DATABASE_URL: postgresql+psycopg://visionguard_app:ci-app-only@127.0.0.1:5432/visionguard_test
+          VISIONGUARD_TEST_MIGRATION_DATABASE_URL: postgresql+psycopg://visionguard_migrator:ci-migrator-only@127.0.0.1:5432/visionguard_test
+        run: python -m pytest backend/tests/postgres -m postgres --strict-markers
       - name: Credential pattern scan
         run: python scripts/check_secrets.py
 

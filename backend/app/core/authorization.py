@@ -4,12 +4,13 @@ import re
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.database.models import (
     CandidateEvent, DatasetAsset, ExportedClip, Organization, OrganizationMembership,
     ProcessingJob, Site, SiteAccess, User, ValidationAnnotation, Video, VideoFrame,
 )
-from app.database.session import SessionLocal
+from app.database.session import SessionLocal, bind_actor_context, bind_object_context, bind_tenant_context
 
 
 ORG_ROLES = {"organization_admin", "site_admin", "safety_reviewer", "read_only_auditor"}
@@ -103,35 +104,58 @@ def authorize_object_request(request: Request, user: User) -> None:
 
     video_id = None
     with SessionLocal() as db:
+        bind_actor_context(db, user.id)
+        def checked_object_context(kind: str, identifier: str) -> None:
+            try:
+                bind_object_context(db, user.id, kind, identifier)
+            except SQLAlchemyError as error:
+                raise _not_found() from error
+        object_kind = None
+        object_id = None
         match = re.match(r"^/api/videos/([^/]+)", path)
         if match and match.group(1) == "upload":
             match = None
         if match:
             video_id = match.group(1)
+            object_kind, object_id = "video", video_id
         match = re.match(r"^/api/frames/([^/]+)", path)
         if match:
+            object_kind, object_id = "frame", match.group(1)
+            checked_object_context(object_kind, object_id)
             frame = db.get(VideoFrame, match.group(1))
             video_id = frame.video_id if frame else None
         match = re.match(r"^/api/events/([^/]+)", path)
         if match:
+            object_kind, object_id = "event", match.group(1)
+            checked_object_context(object_kind, object_id)
             event = db.get(CandidateEvent, match.group(1))
             video_id = event.video_id if event else None
         match = re.match(r"^/api/jobs/([^/]+)", path)
         if match:
+            object_kind, object_id = "job", match.group(1)
+            checked_object_context(object_kind, object_id)
             job = db.get(ProcessingJob, match.group(1))
             video_id = job.video_id if job else None
         match = re.match(r"^/api/exports/([^/]+)", path)
         if match:
+            object_kind, object_id = "export", match.group(1)
+            checked_object_context(object_kind, object_id)
             clip = db.get(ExportedClip, match.group(1))
             video_id = clip.video_id if clip else None
         match = re.match(r"^/api/datasets/assets/([^/]+)", path)
         if match and match.group(1) not in {"summary"}:
+            object_kind, object_id = "dataset_asset", match.group(1)
+            checked_object_context(object_kind, object_id)
             asset = db.get(DatasetAsset, match.group(1))
             video_id = asset.video_id if asset else None
         match = re.match(r"^/api/validation/annotations/([^/]+)", path)
         if match:
+            object_kind, object_id = "annotation", match.group(1)
+            checked_object_context(object_kind, object_id)
             annotation = db.get(ValidationAnnotation, match.group(1))
             video_id = annotation.video_id if annotation else None
+        if object_kind == "video" and object_id:
+            checked_object_context(object_kind, object_id)
         if video_id is not None:
             video = db.get(Video, video_id)
             if not video:
@@ -139,4 +163,13 @@ def authorize_object_request(request: Request, user: User) -> None:
             request.state.organization_id = video.organization_id
             request.state.site_id = video.site_id
             membership = authorize_video(db, user, video, permission)
+            request.state.membership_role = membership.role
+            return
+        organization_id = request.headers.get("x-organization-id")
+        site_id = request.headers.get("x-site-id")
+        if organization_id or site_id:
+            organization, site, membership = resolve_scope(db, user, organization_id, site_id, permission)
+            bind_tenant_context(db, user.id, organization.id, [site.id])
+            request.state.organization_id = organization.id
+            request.state.site_id = site.id
             request.state.membership_role = membership.role

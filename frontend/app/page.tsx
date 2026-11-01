@@ -11,7 +11,7 @@ export default function OverviewPage() {
   const [data,setData]=useState<Overview|null>(null); const [error,setError]=useState("");
   useEffect(()=>{request<Overview>("/api/overview").then(setData).catch(e=>setError(e.message))},[]);
   return <>
-    <header className="page-head"><div><div className="eyebrow">Offline video intelligence</div><h1>Operations overview</h1><p>Measured state from the local SQLite workspace—no placeholder production statistics.</p></div><ResearchBanner/></header>
+    <header className="page-head"><div><div className="eyebrow">Offline video intelligence</div><h1>Operations overview</h1><p>Measured state from the local PostgreSQL workspace—no placeholder production statistics.</p></div><ResearchBanner/></header>
     {error&&<ErrorBox message={error}/>}<div className="grid metrics">
       <Metric label="Uploaded videos" value={data?.videos??"—"}/><Metric label="Processing jobs" value={data?.jobs??"—"}/><Metric label="Indexed videos" value={data?.indexed_videos??"—"}/><Metric label="Candidate events" value={data?.candidate_events??"—"}/><Metric label="Pending review" value={data?.pending_review??"—"}/><Metric label="Failures" value={data?.processing_failures??"—"}/>
     </div>

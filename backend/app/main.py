@@ -30,7 +30,7 @@ from app.core.security import (
     require_roles, revoke_all_user_sessions, revoke_session, verify_password,
 )
 from app.database import get_db, init_db
-from app.database.session import SessionLocal
+from app.database.session import SessionLocal, request_database_context
 from app.database.models import (
     AuditEvent, CandidateEvent, DatasetAsset, EmbeddingCache, ExportedClip, ObjectDetection, Organization,
     OrganizationMembership, PoseEvidence, ProcessingJob, SafetyZone, Site, SiteAccess, User,
@@ -119,7 +119,12 @@ async def authentication_gate(request: Request, call_next):
             record_audit(audit_db, request, "authorization.object_access", "denied", actor=request.state.user, organization_id=getattr(request.state, "organization_id", None), object_type="api_path", metadata={"method": request.method, "path": request.url.path})
             audit_db.commit()
         return JSONResponse(status_code=error.status_code, content={"detail": {"code": "resource_not_found", "message": "Resource not found."}}, headers={"X-Request-ID": request.state.request_id})
-    response = await call_next(request)
+    with request_database_context(
+        request.state.user.id,
+        getattr(request.state, "organization_id", None),
+        (request.state.site_id,) if getattr(request.state, "site_id", None) else (),
+    ):
+        response = await call_next(request)
     response.headers["X-Request-ID"] = request.state.request_id
     return response
 

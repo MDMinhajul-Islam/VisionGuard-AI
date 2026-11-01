@@ -14,7 +14,7 @@ from app.database.models import (
     CandidateEvent, EmbeddingCache, ObjectDetection, PoseEvidence, ProcessingJob,
     SafetyZone, Video, VideoFrame, now_iso,
 )
-from app.database.session import SessionLocal
+from app.database.session import SessionLocal, bind_job_context
 from app.services.video_io import iter_sampled_frames, probe_video, save_jpeg
 from app.vision.clip_engine import clip_engine
 from app.vision.fall_detection import detect_fall_events, pose_signals
@@ -63,6 +63,7 @@ def check_cancel(db, job):
 def process_video_job(job_id: str) -> None:
     settings = get_settings()
     db = SessionLocal()
+    bind_job_context(db, job_id)
     job = db.get(ProcessingJob, job_id)
     if not job:
         db.close()

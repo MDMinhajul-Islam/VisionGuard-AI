@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     login_rate_limit_attempts: int = Field(default=5, ge=2, le=100)
     login_rate_limit_window_seconds: int = Field(default=300, ge=10, le=3600)
     database_url: str | None = None
+    migration_database_url: str | None = None
     runtime_dir: Path = PROJECT_ROOT / "runtime"
     model_dir: Path = PROJECT_ROOT / "models"
 
@@ -44,6 +45,10 @@ class Settings(BaseSettings):
     @property
     def db_url(self) -> str:
         return self.database_url or f"sqlite:///{(self.runtime_dir / 'visionguard.db').as_posix()}"
+
+    @property
+    def is_postgresql(self) -> bool:
+        return self.db_url.startswith("postgresql")
 
     def effective_auth_secret(self) -> str:
         if self.auth_secret:

@@ -1,0 +1,23 @@
+name: visionguard-postgres
+
+services:
+  postgres:
+    image: postgres:17.11-bookworm
+    restart: unless-stopped
+    env_file:
+      - .env.postgres
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${VISIONGUARD_POSTGRES_PORT:-54329}:5432"
+    volumes:
+      - ./runtime/postgres-data:/var/lib/postgresql/data
+      - ./scripts/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true

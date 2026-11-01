@@ -9,11 +9,13 @@ htmlcov/
 .env
 .env.*
 !.env.example
+!.env.postgres.example
 node_modules/
 .next/
 next-env.d.ts
 out/
 runtime/
+postgres-data/
 models/
 data/external/
 data/**/*.mp4

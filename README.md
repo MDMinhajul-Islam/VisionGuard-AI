@@ -1,5 +1,11 @@
 # VisionGuard AI — Phase 2 Research Prototype
 
+## PostgreSQL and tenant isolation
+
+Sprint 5A adds a pinned PostgreSQL 17.11 environment, Alembic history, repeatable SQLite migration, least-privileged application role, transaction-scoped organization/site context, FORCE RLS on tenant media and evidence, direct-SQL isolation tests, and tested backup/restore scripts. SQLite remains an unchanged recovery fallback; PostgreSQL startup refuses an unmigrated schema.
+
+Start with [PostgreSQL Architecture](docs/POSTGRESQL_ARCHITECTURE.md), [Migration](docs/POSTGRESQL_MIGRATION.md), [RLS](docs/ROW_LEVEL_SECURITY.md), and [Backup/Restore](docs/BACKUP_RESTORE.md). This remains a controlled local prototype—not a production deployment or unattended safety system.
+
 Sprint 3 adds a commercial engineering foundation—authenticated local access, role-based authorization, detector adapters, reproducible benchmark records, and crash-recovery safeguards. It does **not** make VisionGuard production-ready or safety-certified.
 
 VisionGuard AI is an offline, human-reviewed video research workspace for semantic moment retrieval and experimental industrial-safety review. It processes authorized recorded footage only. It does **not** connect to live CCTV, recognize faces, identify people, infer intent, or confirm incidents automatically.

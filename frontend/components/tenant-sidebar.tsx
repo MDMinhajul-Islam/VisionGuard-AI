@@ -4,7 +4,7 @@ import Link from "next/link";
 import {useEffect, useMemo, useState} from "react";
 import {usePathname, useRouter} from "next/navigation";
 import {Activity, Boxes, Clapperboard, ClipboardCheck, Database, Gauge, Info, LogIn, Search, ShieldCheck} from "lucide-react";
-import {request} from "@/lib/api";
+import {announceTenantScopeReady,request} from "@/lib/api";
 
 type Site = {id:string;name:string;status:string};
 type Organization = {id:string;name:string;workspace_type:string;membership_role:string;sites:Site[]};
@@ -37,6 +37,7 @@ export function TenantSidebar() {
           const site=selected.sites.find(item=>item.id===savedSite)??selected.sites[0];
           setOrganizationId(selected.id); localStorage.setItem("visionguard_org_id",selected.id); localStorage.setItem("visionguard_workspace_type",selected.workspace_type);
           if(site){setSiteId(site.id);localStorage.setItem("visionguard_site_id",site.id)}
+          announceTenantScopeReady();
         }
       }).catch(()=>{if(pathname!=="/login")router.replace("/login?reason=session_expired")});
   },[pathname,router]);
