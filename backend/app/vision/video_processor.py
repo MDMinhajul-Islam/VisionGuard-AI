@@ -180,6 +180,8 @@ def process_video_job(job_id: str) -> None:
             db.commit()
             metrics.update({
                 "object_detections": detection_count,
+                "detector_model": object_detector.model_name,
+                "detector_version": object_detector.metadata.model_version,
                 "detection_seconds": time.perf_counter() - detection_started,
                 "average_detector_inference_ms": sum(inference_times) / len(inference_times) if inference_times else None,
             })

@@ -62,6 +62,7 @@ def test_cross_organization_objects_and_collections_are_isolated():
         assert {item["id"] for item in listed} == {tenant_a["video_id"]}
         assert client.get(f"/api/videos/{tenant_b['video_id']}").status_code == 404
         assert client.get(f"/api/videos/{tenant_b['video_id']}/media").status_code == 404
+        assert client.get(f"/api/videos/{tenant_b['video_id']}/analysis-timeline").status_code == 404
         assert client.get(f"/api/frames/{tenant_b['frame_id']}/image").status_code == 404
         assert client.get(f"/api/events/{tenant_b['event_id']}/evidence").status_code == 404
         assert client.get(f"/api/jobs/{tenant_b['job_id']}").status_code == 404
@@ -73,6 +74,10 @@ def test_cross_organization_objects_and_collections_are_isolated():
         assert client.get("/api/frames/%2e%2e%2fprivate/image").status_code in {400, 404}
         dataset_rows = client.get("/api/datasets/assets").json()
         assert {item["id"] for item in dataset_rows} == {tenant_a["asset_id"]}
+        timeline = client.get(f"/api/videos/{tenant_a['video_id']}/analysis-timeline").json()
+        assert timeline["video"]["id"] == tenant_a["video_id"]
+        assert timeline["provenance"]["detector_architecture"] == "SSDLite320 MobileNetV3 Large"
+        assert timeline["provenance"]["note"].startswith("Only stored sampled inference")
         with SessionLocal() as db:
             denied = db.scalar(select(AuditEvent).where(AuditEvent.action == "authorization.object_access", AuditEvent.outcome == "denied", AuditEvent.organization_id == tenant_b["organization_id"]))
             assert denied is not None

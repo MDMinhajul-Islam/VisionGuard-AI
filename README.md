@@ -1,5 +1,11 @@
 # VisionGuard AI — Phase 2 Research Prototype
 
+## Professional recorded-video analysis
+
+Sprint 5B adds a production-quality recorded-video workspace at `/videos/[id]`. Genuine stored SSDlite boxes, temporary track IDs, MediaPipe landmarks, saved safety zones, and event intervals are synchronized over the original MP4 with `requestVideoFrameCallback()`. Sparse inference is explicitly labeled, missing samples are distinguished from samples with no detections, and no boxes are interpolated. See the [player guide](docs/VIDEO_ANALYSIS_PLAYER.md), [synchronization contract](docs/VIDEO_OVERLAY_SYNCHRONIZATION.md), [evidence provenance](docs/VIDEO_EVIDENCE_PROVENANCE.md), and [visual verification](docs/SPRINT5B_VISUAL_VERIFICATION.md).
+
+Media remains in the existing tenant-aware local filesystem on the F drive. Sprint 5B introduces no S3, MinIO, cloud bucket, or external-storage requirement.
+
 ## PostgreSQL and tenant isolation
 
 Sprint 5A adds a pinned PostgreSQL 17.11 environment, Alembic history, repeatable SQLite migration, least-privileged application role, transaction-scoped organization/site context, FORCE RLS on tenant media and evidence, direct-SQL isolation tests, and tested backup/restore scripts. SQLite remains an unchanged recovery fallback; PostgreSQL startup refuses an unmigrated schema.
@@ -33,14 +39,14 @@ Safety outputs are candidates only: **Potential Fall — Review Required** and *
 ```mermaid
 flowchart LR
   U[Authorized MP4] --> A[FastAPI validation]
-  A --> Q[SQLite local job queue]
+  A --> Q[PostgreSQL processing jobs]
   Q --> F[FFmpeg/OpenCV bounded frames]
   F --> C[CLIP ViT-B/32 index]
   F --> D[SSDLite detector + IoU tracker]
   F --> P[MediaPipe pose timeline]
   D --> Z[Manual-zone persistence]
   P --> R[Fall temporal rules]
-  C & Z & R --> S[(SQLite + local artifacts)]
+  C & Z & R --> S[(PostgreSQL + secure local artifacts)]
   S --> API[REST API]
   API --> N[Next.js review dashboard]
   N --> E[Human decision + clip export]
@@ -61,7 +67,7 @@ Prerequisites: Python 3.10–3.14, Node.js 20+, NVIDIA CUDA-compatible PyTorch i
 ```powershell
 git clone https://github.com/MDMinhajul-Islam/VisionGuard-AI.git
 cd VisionGuard-AI
-git switch feat/commercial-foundation-detector-benchmark
+git switch feat/pro-video-analysis-ui
 python -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
@@ -161,7 +167,7 @@ Ground-truth manifests can be validated/imported without changing application co
 
 ## Storage and privacy
 
-SQLite, uploads, extracted frames, embeddings, exports, logs, models, and FFmpeg live under ignored `runtime/` or `models/`. Original uploads are never edited. Do not commit private video or generated clips. Clean these folders manually only after confirming no evidence is needed.
+PostgreSQL stores tenant-owned metadata while uploads, extracted frames, embeddings, exports, logs, models, and FFmpeg remain in ignored local `runtime/`, `data/external/`, or `models/` paths on the F drive. Original uploads are never edited. No cloud storage is required. Do not commit private video or generated clips. Clean these folders manually only after confirming no evidence is needed.
 
 ## License and attribution
 

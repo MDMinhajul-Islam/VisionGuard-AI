@@ -28,6 +28,16 @@ export type FrameEvidence = {
   zones: {id:string;name:string;polygon:number[][]}[];
 };
 
+export type AnalysisDetection={id:string;label:string;confidence:number;bbox:number[];track_id:number|null};
+export type AnalysisPose={timestamp_seconds:number;landmarks:{index:number;x:number;y:number;visibility:number;presence:number}[];signals:Record<string,unknown>;sufficient_evidence:boolean;sync_error_seconds:number};
+export type AnalysisSample={frame_id:string;timestamp_seconds:number;image_url:string;detections:AnalysisDetection[];poses:AnalysisPose[]};
+export type AnalysisTimeline={
+  video:{id:string;duration_seconds:number|null;width:number|null;height:number|null;fps:number|null;media_url:string};
+  window:{start_seconds:number;end_seconds:number;sample_count:number;truncated:boolean};
+  provenance:{processing_job_id:string|null;detector_model:string;detector_architecture:string;detector_version:string;pose_model:string;analysis_fps:number|null;pose_fps:number|null;note:string};
+  samples:AnalysisSample[];zones:{id:string;name:string;zone_type:string;polygon:number[][]}[];events:EventCandidate[];
+};
+
 export type ValidationAnnotation = {
   id:string;video_id:string;event_type:string;start_seconds:number;end_seconds:number;
   ground_truth_label:string;annotation_source:string;reviewer_note:string;

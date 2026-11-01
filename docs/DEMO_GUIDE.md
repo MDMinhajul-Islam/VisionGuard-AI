@@ -1,5 +1,17 @@
 # 2–3 minute demo
 
+## Synchronized video-analysis workflow
+
+1. Sign in at `http://127.0.0.1:3000/login`, choose the authorized organization/site, and open **Video Workspace**.
+2. Select **Open Analysis** on a processed recording. The original MP4—not a thumbnail sequence—loads in the analysis workspace.
+3. Play and seek. Point out the box canvas moving with presented video timestamps and the HUD showing the real analysis sampling rate.
+4. Toggle **Boxes**, **Track IDs**, **Pose**, and **Zones** independently. Use previous/next sample controls to inspect the exact stored observations.
+5. Read the provenance strip: the default runtime is **SSDLite320 MobileNetV3 Large / COCO_V1**, not YOLO. State that similarity/confidence is model output, not a calibrated safety probability.
+6. Select an event marker when available. It seeks to the candidate start and preserves its pending/human-review status.
+7. Open **Incident Review**, record an explicit reviewer decision and note, then export a bounded clip if authorized.
+
+For the local verified example, `fall-18.mp4` contains five samples at 2 FPS and the initial sample contains four genuine stored detections. The clip has no generated event candidate; do not imply otherwise. Screenshots containing research participants remain local in ignored `data/external/validation/reports/`.
+
 ## Phase 2 profile comparison
 
 1. Open `http://127.0.0.1:3000/datasets` and select one of the ten Phase 2 recordings listed in `docs/PHASE2_GENERALIZATION.md`.

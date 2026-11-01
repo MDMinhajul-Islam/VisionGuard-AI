@@ -18,13 +18,47 @@ test("real dashboard routes render and backend data is visible", async ({page}) 
   await expect(page.getByLabel("Current site")).toHaveValue(/.+/);
   await expect(page.getByText("Controlled research mode.")).toBeVisible();
   await page.getByRole("link", {name: /Video Workspace/}).click();
-  await expect(page.getByRole("heading", {name: "Video workspace"})).toBeVisible();
-  await expect(page.getByRole("heading", {name:"Local video library"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Upload. Analyze. Review."})).toBeVisible();
+  await expect(page.getByRole("heading", {name:"Video library"})).toBeVisible();
   await page.getByRole("link", {name: /Semantic Search/}).click();
   await expect(page.getByRole("heading", {name: "Search visual moments"})).toBeVisible();
   await page.getByRole("link", {name: /Models & System/}).click();
   await expect(page.getByRole("heading", {name: "Models & system"})).toBeVisible();
   await expect(page.getByText(/NVIDIA GeForce|CPU fallback/)).toBeVisible();
+});
+
+test("genuine video samples render in the synchronized analysis player", async ({page}) => {
+  test.setTimeout(60_000);
+  await page.goto("/videos");
+  await expect(page.getByRole("heading",{name:"Video library"})).toBeVisible();
+  const firstAnalysis=page.getByRole("link",{name:"Open Analysis"}).first();
+  await expect(firstAnalysis).toBeVisible();
+  await firstAnalysis.click();
+  await expect(page.getByText("SSDLite320 MobileNetV3 Large").first()).toBeVisible();
+  await expect(page.getByText("No interpolation",{exact:true})).toBeVisible();
+  const video=page.locator(".analysis-stage video");
+  await expect.poll(()=>video.evaluate(element=>(element as HTMLVideoElement).readyState)).toBeGreaterThan(0);
+  const overlay=page.getByLabel("Synchronized computer vision overlay");
+  await expect(overlay).toBeVisible();
+  await expect.poll(()=>overlay.evaluate(canvas=>{
+    const context=(canvas as HTMLCanvasElement).getContext("2d");
+    if(!context)return 0;
+    const pixels=context.getImageData(0,0,(canvas as HTMLCanvasElement).width,(canvas as HTMLCanvasElement).height).data;
+    let visible=0;for(let index=3;index<pixels.length;index+=4)if(pixels[index])visible++;
+    return visible;
+  })).toBeGreaterThan(100);
+  await page.getByRole("button",{name:"Pose"}).click();
+  await page.getByRole("button",{name:"Next analyzed sample"}).click();
+  await page.getByLabel("Speed").selectOption("1.5");
+  await expect(page.getByRole("button",{name:"Enter fullscreen analysis"})).toBeVisible();
+  await page.screenshot({path:"../data/external/validation/reports/sprint5b-video-analysis-player.png",fullPage:true});
+});
+
+test("analysis workspace has no compact-viewport horizontal overflow", async ({page}) => {
+  await page.setViewportSize({width:390,height:844});
+  await page.goto("/videos");
+  await expect(page.getByRole("heading",{name:"Video library"})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();
 });
 
 test("revoked browser session returns to sign in", async ({page}) => {

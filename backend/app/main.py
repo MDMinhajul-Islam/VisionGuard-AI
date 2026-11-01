@@ -561,6 +561,67 @@ def detections(video_id: str, db: Session = Depends(get_db)):
     return [{"id": row.id, "frame_id": row.frame_id, "timestamp_seconds": row.timestamp_seconds, "label": row.label, "confidence": row.confidence, "bbox": json.loads(row.bbox_json), "track_id": row.track_id} for row in rows]
 
 
+@app.get("/api/videos/{video_id}/analysis-timeline")
+def analysis_timeline(
+    video_id: str, start_seconds: float = 0, end_seconds: float | None = None,
+    limit: int = 2000, db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("admin", "reviewer")),
+):
+    """Bounded genuine inference samples for tenant-authorized synchronized playback."""
+    video = db.get(Video, video_id)
+    if not video:
+        raise HTTPException(404, "video not found")
+    authorize_video(db, actor, video, "read")
+    start = max(0.0, start_seconds)
+    end = min(video.duration_seconds or start + 300, end_seconds if end_seconds is not None else start + 300)
+    if end < start or end - start > 300:
+        raise HTTPException(422, "timeline window must be between 0 and 300 seconds")
+    bounded_limit = min(max(limit, 1), 5000)
+    frames = db.scalars(select(VideoFrame).where(
+        VideoFrame.video_id == video_id, VideoFrame.timestamp_seconds >= start,
+        VideoFrame.timestamp_seconds <= end,
+    ).order_by(VideoFrame.timestamp_seconds).limit(bounded_limit)).all()
+    frame_ids = [item.id for item in frames]
+    detection_rows = db.scalars(select(ObjectDetection).where(ObjectDetection.frame_id.in_(frame_ids)).order_by(ObjectDetection.timestamp_seconds)).all() if frame_ids else []
+    pose_rows = db.scalars(select(PoseEvidence).where(PoseEvidence.frame_id.in_(frame_ids)).order_by(PoseEvidence.timestamp_seconds)).all() if frame_ids else []
+    by_frame: dict[str, list] = {}
+    for item in detection_rows:
+        by_frame.setdefault(item.frame_id, []).append(item)
+    poses_by_frame: dict[str, list] = {}
+    for item in pose_rows:
+        poses_by_frame.setdefault(item.frame_id, []).append(item)
+    zone_rows = db.scalars(select(SafetyZone).where(SafetyZone.video_id == video_id)).all()
+    event_rows = db.scalars(select(CandidateEvent).where(
+        CandidateEvent.video_id == video_id, CandidateEvent.end_seconds >= start,
+        CandidateEvent.start_seconds <= end,
+    ).order_by(CandidateEvent.start_seconds)).all()
+    latest_job = db.scalar(select(ProcessingJob).where(
+        ProcessingJob.video_id == video_id, ProcessingJob.status == "completed",
+    ).order_by(ProcessingJob.completed_at.desc()))
+    config = json.loads(latest_job.config_json) if latest_job else {}
+    return {
+        "video": {"id": video.id, "duration_seconds": video.duration_seconds, "width": video.width, "height": video.height, "fps": video.fps, "media_url": f"/api/videos/{video.id}/media"},
+        "window": {"start_seconds": start, "end_seconds": end, "sample_count": len(frames), "truncated": len(frames) == bounded_limit},
+        "provenance": {
+            "processing_job_id": latest_job.id if latest_job else None,
+            "detector_model": object_detector.model_name,
+            "detector_architecture": object_detector.metadata.architecture,
+            "detector_version": object_detector.metadata.model_version,
+            "pose_model": pose_engine.model_name,
+            "analysis_fps": config.get("analysis_fps"), "pose_fps": config.get("pose_fps"),
+            "note": "Only stored sampled inference is returned; no boxes or landmarks are interpolated.",
+        },
+        "samples": [{
+            "frame_id": frame.id, "timestamp_seconds": frame.timestamp_seconds,
+            "image_url": f"/api/frames/{frame.id}/image",
+            "detections": [{"id": item.id, "label": item.label, "confidence": item.confidence, "bbox": json.loads(item.bbox_json), "track_id": item.track_id} for item in by_frame.get(frame.id, [])],
+            "poses": [{"timestamp_seconds": item.timestamp_seconds, "landmarks": json.loads(item.landmarks_json), "signals": json.loads(item.signals_json), "sufficient_evidence": item.sufficient_evidence, "sync_error_seconds": item.sync_error_seconds} for item in poses_by_frame.get(frame.id, [])],
+        } for frame in frames],
+        "zones": [{"id": item.id, "name": item.name, "zone_type": item.zone_type, "polygon": json.loads(item.polygon_json)} for item in zone_rows],
+        "events": [event_dict(item) for item in event_rows],
+    }
+
+
 @app.post("/api/videos/{video_id}/zones", status_code=201)
 def create_zone(video_id: str, request: ZoneCreate, db: Session = Depends(get_db), _: User = Depends(require_roles("admin", "reviewer"))):
     if not db.get(Video, video_id):
