@@ -27,7 +27,11 @@ export function Empty({title, detail}: {title: string; detail: string}) {
 }
 
 export function ErrorBox({message}: {message: string}) {
-  return <div className="error-box"><AlertTriangle size={18}/>{message}</div>;
+  return <div className="error-box" role="alert"><AlertTriangle size={18}/>{message}</div>;
+}
+
+export function Skeleton({height=18,className=""}:{height?:number;className?:string}){
+  return <span className={`skeleton ${className}`} style={{height}} aria-hidden="true"/>;
 }
 
 export function VideoSelect({videos, value, onChange}: {videos: Video[]; value: string; onChange: (value: string) => void}) {
