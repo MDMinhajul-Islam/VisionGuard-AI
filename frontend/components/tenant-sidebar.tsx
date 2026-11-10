@@ -58,7 +58,7 @@ export function TenantSidebar() {
       <select aria-label="Current site" value={siteId} onChange={event=>selectSite(event.target.value)}>{organization?.sites.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
       <small>{organization?.membership_role.replaceAll("_"," ")}</small>
     </div>}
-    <nav className="nav">{nav.map(([label,href,Icon])=><Link key={href} href={href}><Icon size={17}/>{label}</Link>)}<Link href="/login"><LogIn size={17}/>Sign in</Link></nav>
+    <nav className="nav" aria-label="Primary navigation">{nav.map(([label,href,Icon])=>{const active=href==="/"?pathname==="/":pathname.startsWith(href);return <Link key={href} href={href} className={active?"active":""} aria-current={active?"page":undefined}><Icon size={17}/>{label}</Link>})}<Link href="/login"><LogIn size={17}/>Sign in</Link></nav>
     <div className="sidebar-foot">LOCAL MODE · NO LIVE CCTV<br/>Organization and site isolation enforced by the API.<br/>All events require human review.</div>
   </aside>;
 }
