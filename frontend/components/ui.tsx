@@ -19,7 +19,8 @@ export function Status({value}: {value: string}) {
   const normalized = value.toLowerCase();
   const good = ["completed", "indexed", "confirmed_by_reviewer"].includes(normalized);
   const bad = ["failed", "false_positive"].includes(normalized);
-  return <span className={`status ${good ? "status-good" : bad ? "status-bad" : "status-warn"}`}>{good ? <CheckCircle2 size={13}/> : bad ? <AlertTriangle size={13}/> : normalized === "running" ? <LoaderCircle className="spin" size={13}/> : null}{value.replaceAll("_", " ")}</span>;
+  const readable=value.replaceAll("_", " ");
+  return <span className={`status ${good ? "status-good" : bad ? "status-bad" : "status-warn"}`} aria-label={`Status: ${readable}`}>{good ? <CheckCircle2 size={13} aria-hidden="true"/> : bad ? <AlertTriangle size={13} aria-hidden="true"/> : normalized === "running" ? <LoaderCircle className="spin" size={13} aria-hidden="true"/> : null}{readable}</span>;
 }
 
 export function Empty({title, detail}: {title: string; detail: string}) {
