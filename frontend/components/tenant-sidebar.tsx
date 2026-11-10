@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {useEffect, useMemo, useState} from "react";
 import {usePathname, useRouter} from "next/navigation";
-import {Activity, Boxes, Clapperboard, ClipboardCheck, Database, Gauge, Info, LogIn, Search, ShieldCheck} from "lucide-react";
+import {Activity, Boxes, Clapperboard, ClipboardCheck, Database, Gauge, Info, LogIn, LogOut, Search, ShieldCheck} from "lucide-react";
 import {announceTenantScopeReady,request} from "@/lib/api";
 
 type Site = {id:string;name:string;status:string};
@@ -50,6 +50,7 @@ export function TenantSidebar() {
     window.location.reload();
   }
   function selectSite(value:string){localStorage.setItem("visionguard_site_id",value);setSiteId(value);window.location.reload()}
+  async function logout(){await request("/api/auth/logout",{method:"POST"});localStorage.removeItem("visionguard_org_id");localStorage.removeItem("visionguard_site_id");router.replace("/login")}
   return <aside className="sidebar">
     <Link className="brand" href="/"><span className="brand-mark"><Boxes size={21}/></span><span>VisionGuard AI<small>SECURE REVIEW CONSOLE</small></span></Link>
     {user&&<div className="tenant-picker">
@@ -58,7 +59,7 @@ export function TenantSidebar() {
       <select aria-label="Current site" value={siteId} onChange={event=>selectSite(event.target.value)}>{organization?.sites.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
       <small>{organization?.membership_role.replaceAll("_"," ")}</small>
     </div>}
-    <nav className="nav" aria-label="Primary navigation">{nav.map(([label,href,Icon])=>{const active=href==="/"?pathname==="/":pathname.startsWith(href);return <Link key={href} href={href} className={active?"active":""} aria-current={active?"page":undefined}><Icon size={17}/>{label}</Link>})}<Link href="/login"><LogIn size={17}/>Sign in</Link></nav>
+    <nav className="nav" aria-label="Primary navigation">{nav.map(([label,href,Icon])=>{const active=href==="/"?pathname==="/":pathname.startsWith(href);return <Link key={href} href={href} className={active?"active":""} aria-current={active?"page":undefined}><Icon size={17}/>{label}</Link>})}{user?<button className="nav-action" onClick={()=>void logout()}><LogOut size={17}/>Sign out</button>:<Link href="/login"><LogIn size={17}/>Sign in</Link>}</nav>
     <div className="sidebar-foot">LOCAL MODE · NO LIVE CCTV<br/>Organization and site isolation enforced by the API.<br/>All events require human review.</div>
   </aside>;
 }

@@ -13,6 +13,7 @@ button,input,select,textarea { font:inherit; }
 .brand small { display:block; color:var(--muted); font-size:10px; letter-spacing:.14em; margin-top:3px; }
 .nav { display:grid; min-width:0; gap:7px; }
 .nav a { display:flex; align-items:center; gap:11px; color:#a8b3c2; padding:11px 12px; border-radius:9px; font-size:14px; }
+.nav-action{justify-content:flex-start;background:transparent;color:#a8b3c2;font-weight:400;padding:11px 12px}.nav-action:hover{background:#261b25;color:#ff9cac}
 .nav a:hover { background:#182130; color:white; }
 .nav a.active{background:#172535;color:#a5f5e5;box-shadow:inset 3px 0 var(--cyan)}
 .tenant-picker{display:grid;gap:7px;padding:10px;background:#101722;border:1px solid var(--line);border-radius:10px}.tenant-picker small{color:var(--muted);text-transform:capitalize}.tenant-picker select{min-width:0;width:100%;padding:7px 8px;font-size:12px}
