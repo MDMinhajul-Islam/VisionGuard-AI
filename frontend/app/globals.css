@@ -30,6 +30,7 @@ h2 { font-size:18px; margin:0 0 14px; } h3{margin:0 0 8px;} p{color:#aab4c2;line
 .panel { background:linear-gradient(150deg,#121925,#0e131c); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:0 16px 45px #0003; }
 button.panel { color:var(--text); }
 .metric span { color:var(--muted); font-size:12px; }.metric strong { display:block; font-size:27px; margin-top:9px; }.metric small {color:#6f7c8d;}
+.metric-skeleton{margin-top:10px;max-width:76px}
 .status { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:4px 8px; text-transform:capitalize; font-size:11px; border:1px solid; }
 .status-good{color:#79e9bd;border-color:#28664e;background:#123b2d55}.status-warn{color:#f5c469;border-color:#6d5428;background:#392c1455}.status-bad{color:#ff8ea1;border-color:#713444;background:#3e172255}
 .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }

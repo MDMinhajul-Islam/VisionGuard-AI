@@ -11,8 +11,8 @@ export function Card({children, className=""}: {children: React.ReactNode; class
   return <section className={`panel ${className}`}>{children}</section>;
 }
 
-export function Metric({label, value, detail}: {label: string; value: string | number; detail?: string}) {
-  return <Card className="metric"><span>{label}</span><strong>{value}</strong>{detail && <small>{detail}</small>}</Card>;
+export function Metric({label, value, detail, loading=false}: {label: string; value: string | number; detail?: string; loading?:boolean}) {
+  return <Card className="metric" ><span>{label}</span>{loading?<Skeleton height={34} className="metric-skeleton"/>:<strong>{value}</strong>}{detail && <small>{detail}</small>}</Card>;
 }
 
 export function Status({value}: {value: string}) {

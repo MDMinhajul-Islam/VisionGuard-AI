@@ -14,7 +14,7 @@ export default function OverviewPage() {
   return <>
     <header className="page-head"><div><div className="eyebrow">Offline video intelligence</div><h1>Operations overview</h1><p>Measured state from the local PostgreSQL workspace—no placeholder production statistics.</p></div><ResearchBanner/></header>
     {error&&<ErrorBox message={error}/>}<div className="grid metrics">
-      <Metric label="Uploaded videos" value={data?.videos??"—"}/><Metric label="Processing jobs" value={data?.jobs??"—"}/><Metric label="Indexed videos" value={data?.indexed_videos??"—"}/><Metric label="Candidate events" value={data?.candidate_events??"—"}/><Metric label="Pending review" value={data?.pending_review??"—"}/><Metric label="Failures" value={data?.processing_failures??"—"}/>
+      <Metric label="Uploaded videos" value={data?.videos??"—"} loading={!data&&!error}/><Metric label="Processing jobs" value={data?.jobs??"—"} loading={!data&&!error}/><Metric label="Indexed videos" value={data?.indexed_videos??"—"} loading={!data&&!error}/><Metric label="Candidate events" value={data?.candidate_events??"—"} loading={!data&&!error}/><Metric label="Pending review" value={data?.pending_review??"—"} loading={!data&&!error}/><Metric label="Failures" value={data?.processing_failures??"—"} loading={!data&&!error}/>
     </div>
     <div className="grid grid-3">
       <Card><Film color="#4de0c2"/><h2 style={{marginTop:14}}>Ingest & process</h2><p>Validate recorded MP4 footage, extract timestamped frames, and run bounded local jobs.</p><Link className="button secondary" href="/videos">Open workspace <ArrowRight size={15}/></Link></Card>
