@@ -11,23 +11,28 @@ export function Card({children, className=""}: {children: React.ReactNode; class
   return <section className={`panel ${className}`}>{children}</section>;
 }
 
-export function Metric({label, value, detail}: {label: string; value: string | number; detail?: string}) {
-  return <Card className="metric"><span>{label}</span><strong>{value}</strong>{detail && <small>{detail}</small>}</Card>;
+export function Metric({label, value, detail, loading=false}: {label: string; value: string | number; detail?: string; loading?:boolean}) {
+  return <Card className="metric" ><span>{label}</span>{loading?<Skeleton height={34} className="metric-skeleton"/>:<strong>{value}</strong>}{detail && <small>{detail}</small>}</Card>;
 }
 
 export function Status({value}: {value: string}) {
   const normalized = value.toLowerCase();
   const good = ["completed", "indexed", "confirmed_by_reviewer"].includes(normalized);
   const bad = ["failed", "false_positive"].includes(normalized);
-  return <span className={`status ${good ? "status-good" : bad ? "status-bad" : "status-warn"}`}>{good ? <CheckCircle2 size={13}/> : bad ? <AlertTriangle size={13}/> : normalized === "running" ? <LoaderCircle className="spin" size={13}/> : null}{value.replaceAll("_", " ")}</span>;
+  const readable=value.replaceAll("_", " ");
+  return <span className={`status ${good ? "status-good" : bad ? "status-bad" : "status-warn"}`} aria-label={`Status: ${readable}`}>{good ? <CheckCircle2 size={13} aria-hidden="true"/> : bad ? <AlertTriangle size={13} aria-hidden="true"/> : normalized === "running" ? <LoaderCircle className="spin" size={13} aria-hidden="true"/> : null}{readable}</span>;
 }
 
 export function Empty({title, detail}: {title: string; detail: string}) {
-  return <div className="empty"><div className="empty-icon">◇</div><h3>{title}</h3><p>{detail}</p></div>;
+  return <div className="empty" role="status"><div className="empty-icon" aria-hidden="true">◇</div><h3>{title}</h3><p>{detail}</p></div>;
 }
 
 export function ErrorBox({message}: {message: string}) {
-  return <div className="error-box"><AlertTriangle size={18}/>{message}</div>;
+  return <div className="error-box" role="alert"><AlertTriangle size={18}/>{message}</div>;
+}
+
+export function Skeleton({height=18,className=""}:{height?:number;className?:string}){
+  return <span className={`skeleton ${className}`} style={{height}} aria-hidden="true"/>;
 }
 
 export function VideoSelect({videos, value, onChange}: {videos: Video[]; value: string; onChange: (value: string) => void}) {

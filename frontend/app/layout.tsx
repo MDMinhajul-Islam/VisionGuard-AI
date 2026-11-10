@@ -6,8 +6,9 @@ export const metadata: Metadata = {title: "VisionGuard AI", description: "Offlin
 
 export default function RootLayout({children}: Readonly<{children: React.ReactNode}>) {
   return <html lang="en"><body><div className="shell">
+    <a className="skip-link" href="#main-content">Skip to main content</a>
     <TenantSidebar/>
-    <main className="main">{children}</main>
+    <main className="main" id="main-content" tabIndex={-1}>{children}</main>
   </div></body></html>;
 }
 
