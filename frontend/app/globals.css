@@ -17,6 +17,7 @@ button,input,select,textarea { font:inherit; }
 .nav a:hover { background:#182130; color:white; }
 .nav a.active{background:#172535;color:#a5f5e5;box-shadow:inset 3px 0 var(--cyan)}
 .tenant-picker{display:grid;gap:7px;padding:10px;background:#101722;border:1px solid var(--line);border-radius:10px}.tenant-picker small{color:var(--muted);text-transform:capitalize}.tenant-picker select{min-width:0;width:100%;padding:7px 8px;font-size:12px}
+.user-summary{display:flex;align-items:center;gap:8px}.user-summary>span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#203549;color:#9ff2e2;font-weight:800}.user-summary small{color:#dce5ee;text-transform:none;font-weight:700}
 .sidebar-foot { margin-top:auto; font-size:11px; color:#728095; line-height:1.6; border-top:1px solid var(--line); padding-top:16px; }
 .main { padding:28px 36px 60px; max-width:1500px; width:100%; }
 .page-head { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:22px; }

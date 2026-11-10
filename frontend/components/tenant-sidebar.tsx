@@ -54,7 +54,7 @@ export function TenantSidebar() {
   return <aside className="sidebar">
     <Link className="brand" href="/"><span className="brand-mark"><Boxes size={21}/></span><span>VisionGuard AI<small>SECURE REVIEW CONSOLE</small></span></Link>
     {user&&<div className="tenant-picker">
-      <small>{user.display_name}</small>
+      <div className="user-summary"><span aria-hidden="true">{user.display_name.trim().charAt(0).toUpperCase()}</span><small>{user.display_name}</small></div>
       <select aria-label="Current organization" value={organizationId} onChange={event=>selectOrganization(event.target.value)}>{organizations.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
       <select aria-label="Current site" value={siteId} onChange={event=>selectSite(event.target.value)}>{organization?.sites.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
       <small>{organization?.membership_role.replaceAll("_"," ")}</small>
