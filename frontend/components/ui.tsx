@@ -24,7 +24,7 @@ export function Status({value}: {value: string}) {
 }
 
 export function Empty({title, detail}: {title: string; detail: string}) {
-  return <div className="empty"><div className="empty-icon">◇</div><h3>{title}</h3><p>{detail}</p></div>;
+  return <div className="empty" role="status"><div className="empty-icon" aria-hidden="true">◇</div><h3>{title}</h3><p>{detail}</p></div>;
 }
 
 export function ErrorBox({message}: {message: string}) {
